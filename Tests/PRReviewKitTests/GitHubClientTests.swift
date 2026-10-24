@@ -321,4 +321,48 @@ final class GitHubClientTests: XCTestCase {
             XCTFail("unexpected error: \(error)")
         }
     }
+
+    func testResolveEndpointAcceptsURLsAndShorthand() async throws {
+        let client = GitHubClient(commandRunner: ScriptedCommandRunner())
+        let expected = PREndpoint(owner: "o", repo: "r", number: 7)
+
+        for arg in ["https://github.com/o/r/pull/7", "https://www.github.com/o/r/pull/7/files", "o/r#7", " o/r#7 "] {
+            let resolved = try await client.resolveEndpoint(from: arg)
+            XCTAssertEqual(resolved, expected, arg)
+        }
+    }
+
+    /// Owner and repo reach `gh` as `-F owner=...` and REST path segments, so
+    /// an `@file` or `..` must be refused before any command runs.
+    func testResolveEndpointRejectsNamesGhWouldInterpret() async {
+        let runner = ScriptedCommandRunner()
+        let client = GitHubClient(commandRunner: runner)
+
+        for arg in ["@etc/r#1", "o/..#1", "https://github.com/%40o/r/pull/1", "https://github.com/o/r"] {
+            do {
+                _ = try await client.resolveEndpoint(from: arg)
+                XCTFail("expected parse error for \(arg)")
+            } catch let error as GitHubError {
+                guard case .parse = error else { return XCTFail("expected parse, got \(error)") }
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+        }
+        XCTAssertTrue(runner.calls.isEmpty)
+    }
+
+    func testResolveEndpointRejectsInvalidCurrentRepositoryName() async {
+        let runner = ScriptedCommandRunner()
+        runner.results = [GH.Result(data: Data("@etc/r\n".utf8), stderr: "")]
+        let client = GitHubClient(commandRunner: runner)
+
+        do {
+            _ = try await client.resolveEndpoint(from: "5")
+            XCTFail("expected parse error")
+        } catch let error as GitHubError {
+            guard case .parse = error else { return XCTFail("expected parse, got \(error)") }
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
 }

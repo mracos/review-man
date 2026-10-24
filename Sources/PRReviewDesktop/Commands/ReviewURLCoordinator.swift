@@ -12,17 +12,17 @@ public enum ReviewURLCoordinator {
         case "pr-review":
             return endpoint(from: url)
         case "https", "http":
-            // Only GitHub PR URLs are routed to a review window.
-            guard let host = url.host?.lowercased(),
-                  host == "github.com" || host == "www.github.com" else { return nil }
-            return url.absoluteString
+            // Only GitHub PR URLs are routed, keyed like launcher URLs so the
+            // same PR never opens a second window.
+            return PREndpoint(gitHubURL: url)?.description
         default:
             return nil
         }
     }
 
     /// Strictly validates `pr-review://open/owner/repo/number`: no query,
-    /// fragment, or trailing slash; owner/repo non-empty; number positive.
+    /// fragment, or trailing slash; owner/repo valid GitHub names
+    /// (`PREndpoint.isValidName`); number positive.
     public static func endpoint(from url: URL) -> String? {
         guard url.query == nil, url.fragment == nil else { return nil }
         // URL parsing normalizes a trailing slash away; reject it explicitly.
@@ -34,9 +34,7 @@ public enum ReviewURLCoordinator {
         guard parts.first == "" else { return nil }
         let segments = Array(parts.dropFirst())
         guard segments.count == 3, segments.allSatisfy({ !$0.isEmpty }) else { return nil }
-        let owner = segments[0]
-        let repo = segments[1]
-        guard let number = Int(segments[2]), number > 0 else { return nil }
-        return "\(owner)/\(repo)#\(number)"
+        guard let number = Int(segments[2]) else { return nil }
+        return PREndpoint(validatingOwner: segments[0], repo: segments[1], number: number)?.description
     }
 }

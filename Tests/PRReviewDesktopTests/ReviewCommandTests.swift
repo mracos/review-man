@@ -233,10 +233,20 @@ final class ReviewURLCoordinatorTests: XCTestCase {
             ReviewURLCoordinator.reference(for: URL(string: "pr-review://open/octocat/hello-world/42")!),
             "octocat/hello-world#42"
         )
+        // GitHub URLs map to the same key as launcher URLs, so one PR is one window.
         XCTAssertEqual(
             ReviewURLCoordinator.reference(for: URL(string: "https://github.com/o/r/pull/7")!),
-            "https://github.com/o/r/pull/7"
+            "o/r#7"
         )
+        XCTAssertEqual(
+            ReviewURLCoordinator.reference(for: URL(string: "https://github.com/o/r/pull/7/files#discussion_r1")!),
+            "o/r#7"
+        )
+        XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "https://github.com/o/r")!))
+        // Names gh or a REST path would interpret are rejected.
+        XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "pr-review://open/%40foo/r/1")!))
+        XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "pr-review://open/o/../1")!))
+        XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "pr-review://open/o/r%3Fx/1")!))
         // Strict validation: negative/zero numbers, missing parts, other schemes.
         XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "pr-review://open/o/r/0")!))
         XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "pr-review://open/o/r/-1")!))
@@ -253,7 +263,7 @@ final class ReviewURLCoordinatorTests: XCTestCase {
         XCTAssertNil(ReviewURLCoordinator.reference(for: URL(string: "https://example.com/o/r/pull/1")!))
         XCTAssertEqual(
             ReviewURLCoordinator.reference(for: URL(string: "https://www.github.com/o/r/pull/1")!),
-            "https://www.github.com/o/r/pull/1"
+            "o/r#1"
         )
     }
 }

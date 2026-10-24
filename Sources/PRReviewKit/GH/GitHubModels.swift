@@ -11,7 +11,38 @@ public struct PREndpoint: Equatable, CustomStringConvertible {
         self.number = number
     }
 
+    /// Nil unless both names pass `isValidName` and the number is positive.
+    public init?(validatingOwner owner: String, repo: String, number: Int) {
+        guard number > 0, Self.isValidName(owner), Self.isValidName(repo) else { return nil }
+        self.init(owner: owner, repo: repo, number: number)
+    }
+
+    /// Parses `http(s)://(www.)github.com/owner/repo/pull/N`, ignoring any
+    /// trailing tab (`/files`), query or fragment.
+    public init?(gitHubURL url: URL) {
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host?.lowercased(), host == "github.com" || host == "www.github.com"
+        else { return nil }
+        let parts = url.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 5, parts[0].isEmpty, parts[3] == "pull", let number = Int(parts[4]) else { return nil }
+        self.init(validatingOwner: parts[1], repo: parts[2], number: number)
+    }
+
     public var description: String { "\(owner)/\(repo)#\(number)" }
+
+    /// GitHub owner and repository names: ASCII letters, digits, `.`, `_` and
+    /// `-`, not made only of dots. Both reach `gh` as `-F owner=...` and as
+    /// REST path segments, where a leading `@` reads a local file and `..`
+    /// walks to another endpoint.
+    public static func isValidName(_ name: String) -> Bool {
+        guard !name.isEmpty, name.contains(where: { $0 != "." }) else { return false }
+        return name.unicodeScalars.allSatisfy { scalar in
+            switch scalar {
+            case "a"..."z", "A"..."Z", "0"..."9", ".", "_", "-": return true
+            default: return false
+            }
+        }
+    }
 }
 
 public struct PRInfo {

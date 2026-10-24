@@ -96,4 +96,11 @@ extension LauncherRequestParserTests {
         XCTAssertNil(LauncherRequestParser.resolveEndpoint(from: "https://github.com/a//b/pull/7"))
         XCTAssertNil(LauncherRequestParser.resolveEndpoint(from: "https://github.com/a/b//pull/7"))
     }
+
+    func testRejectsNamesGhWouldInterpret() {
+        XCTAssertNil(LauncherRequestParser.resolveEndpoint(from: "@etc/r#1"))
+        XCTAssertNil(LauncherRequestParser.resolveEndpoint(from: "o/..#1"))
+        XCTAssertNil(LauncherRequestParser.resolveEndpoint(from: "https://github.com/@etc/r/pull/1"))
+        XCTAssertNil(LauncherRequestParser.appURL(for: "@etc/r#1"))
+    }
 }

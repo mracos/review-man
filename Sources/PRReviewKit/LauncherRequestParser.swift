@@ -69,13 +69,13 @@ public enum LauncherRequestParser {
                   path.allSatisfy({ !$0.isEmpty }),
                   path[2] == "pull",
                   let number = Int(path[3]), number > 0 else { return nil }
-            return PREndpoint(owner: path[0], repo: path[1], number: number)
+            return PREndpoint(validatingOwner: path[0], repo: path[1], number: number)
         }
         guard trimmed.contains("#") else { return nil }
         let parts = trimmed.split(separator: "#", maxSplits: 1)
         guard parts.count == 2, let number = Int(parts[1]), number > 0 else { return nil }
         let repoParts = parts[0].split(separator: "/")
         guard repoParts.count == 2 else { return nil }
-        return PREndpoint(owner: String(repoParts[0]), repo: String(repoParts[1]), number: number)
+        return PREndpoint(validatingOwner: String(repoParts[0]), repo: String(repoParts[1]), number: number)
     }
 }
