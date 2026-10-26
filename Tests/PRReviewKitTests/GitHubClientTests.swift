@@ -20,6 +20,34 @@ private final class ScriptedCommandRunner: CommandRunning {
     }
 }
 
+/// Answers the thread page once, then each per-thread comment page after a
+/// short delay, recording how many comment fetches were in flight at once.
+private final class ConcurrencyTrackingRunner: CommandRunning, @unchecked Sendable {
+    let threadsPage: Data
+    let commentsPage: Data
+    private let lock = NSLock()
+    private var inFlight = 0
+    private(set) var maxInFlight = 0
+
+    init(threadsPage: Data, commentsPage: Data) {
+        self.threadsPage = threadsPage
+        self.commentsPage = commentsPage
+    }
+
+    func run(_ args: [String], timeout: TimeInterval) async throws -> GH.Result {
+        guard args.contains(where: { $0.hasPrefix("threadID=") }) else {
+            return GH.Result(data: threadsPage, stderr: "")
+        }
+        lock.withLock {
+            inFlight += 1
+            maxInFlight = max(maxInFlight, inFlight)
+        }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        lock.withLock { inFlight -= 1 }
+        return GH.Result(data: commentsPage, stderr: "")
+    }
+}
+
 final class GitHubClientTests: XCTestCase {
 
     private let ep = PREndpoint(owner: "o", repo: "r", number: 3)
@@ -109,7 +137,8 @@ final class GitHubClientTests: XCTestCase {
     private func threadsPage(
         hasNext: Bool,
         endCursor: String?,
-        node: [String: Any]? = nil
+        node: [String: Any]? = nil,
+        nodes: [[String: Any]] = []
     ) -> [String: Any] {
         [
             "data": [
@@ -120,7 +149,7 @@ final class GitHubClientTests: XCTestCase {
                                 "hasNextPage": hasNext,
                                 "endCursor": endCursor as Any,
                             ],
-                            "nodes": node.map { [$0] } ?? [],
+                            "nodes": node.map { [$0] } ?? nodes,
                         ],
                     ],
                 ],
@@ -243,6 +272,25 @@ final class GitHubClientTests: XCTestCase {
         let second = runner.calls[1].joined(separator: " ")
         XCTAssertTrue(second.contains("cursor=cursor-A"))
         XCTAssertFalse(runner.calls[1].first(where: { $0.hasPrefix("query=") })?.contains("cursor-A") ?? false)
+    }
+
+    /// A page of long threads used to spawn one `gh` per thread at once.
+    func testThreadCommentFetchesAreBoundedAndKeepOrder() async throws {
+        let ids = (1...12).map { "t\($0)" }
+        let runner = ConcurrencyTrackingRunner(
+            threadsPage: graphQLData(threadsPage(
+                hasNext: false,
+                endCursor: nil,
+                nodes: ids.map { threadNode(id: $0, commentsHasNext: true, commentsCursor: "c-\($0)") }
+            )),
+            commentsPage: graphQLData(commentsPage(nodes: [], hasNext: false, endCursor: nil))
+        )
+
+        let threads = try await GitHubClient(commandRunner: runner).fetchThreads(ep)
+
+        XCTAssertEqual(threads.map(\.id), ids)
+        XCTAssertLessThanOrEqual(runner.maxInFlight, GitHubClient.maxConcurrentThreadCommentFetches)
+        XCTAssertGreaterThan(runner.maxInFlight, 1)
     }
 
     /// A failed submit must still remove its private payload file.

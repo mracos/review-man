@@ -363,6 +363,10 @@ public final class GitHubClient: GitHubServing {
     }
     """
 
+    /// Upper bound on concurrent per-thread comment fetches, each one a `gh`
+    /// process; a page holds up to 100 threads.
+    static let maxConcurrentThreadCommentFetches = 4
+
     public func fetchThreads(_ ep: PREndpoint) async throws -> [PRThread] {
         AppLog.info("github", "Fetching review threads for \(ep)")
         var threads: [PRThread] = []
@@ -379,13 +383,15 @@ public final class GitHubClient: GitHubServing {
                 variables: variables
             )
             let conn = data.repository.pullRequest.reviewThreads
-            // Fetch each thread's (possibly multi-page) comments concurrently;
-            // the task group keeps concurrency bounded by the executor and
-            // preserves thread order by collecting into index slots.
+            // Fetch each thread's (possibly multi-page) comments concurrently,
+            // at most `maxConcurrentThreadCommentFetches` `gh` processes at a
+            // time, preserving thread order by collecting into index slots.
             let pageNodes = conn.nodes
             var ordered: [PRThread?] = Array(repeating: nil, count: pageNodes.count)
             try await withThrowingTaskGroup(of: (Int, PRThread).self) { group in
-                for (i, node) in pageNodes.enumerated() {
+                var pending = pageNodes.enumerated().makeIterator()
+                func startNext() {
+                    guard let (i, node) = pending.next() else { return }
                     group.addTask {
                         let comments = try await self.fetchThreadComments(threadID: node.id, initial: node.comments)
                         let thread = PRThread(
@@ -403,8 +409,10 @@ public final class GitHubClient: GitHubServing {
                         return (i, thread)
                     }
                 }
+                for _ in 0..<Self.maxConcurrentThreadCommentFetches { startNext() }
                 for try await (i, thread) in group {
                     ordered[i] = thread
+                    startNext()
                 }
             }
             threads.append(contentsOf: ordered.compactMap { $0 })
