@@ -143,6 +143,31 @@ final class ReviewPersistenceTests: XCTestCase {
         XCTAssertEqual(loaded, ["a.swift", "b.swift"])
     }
 
+    /// Drafts hold private comment bodies and file paths, so only the user may
+    /// read them: new files, overwritten files and a created directory alike.
+    func testFilesAreOwnerOnly() async throws {
+        let parent = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let dir = parent.appendingPathComponent("store")
+        let persistence = ReviewPersistence(directory: dir)
+        let fm = FileManager.default
+        func mode(_ url: URL) throws -> Int {
+            try (fm.attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber)?.intValue ?? -1
+        }
+
+        try await persistence.saveViewed(["a.swift"], for: ep, headSHA: "v")
+        let viewed = dir.appendingPathComponent(persistence.viewedFileName(ep, sha: "v"))
+        try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: viewed.path)
+        try await persistence.saveViewed(["b.swift"], for: ep, headSHA: "v")
+        try await persistence.saveHiddenReviewers(["u"], for: ep)
+
+        XCTAssertEqual(try mode(dir), 0o700)
+        XCTAssertEqual(try mode(viewed), 0o600)
+        for name in try fm.contentsOfDirectory(atPath: dir.path) {
+            XCTAssertEqual(try mode(dir.appendingPathComponent(name)), 0o600, name)
+        }
+    }
+
     /// Hidden reviewers round-trip as a JSON string array, keyed per PR: the
     /// same file serves every head of the pull request (no SHA in the name).
     func testHiddenReviewersRoundTripIsPRScoped() async throws {

@@ -168,11 +168,17 @@ public actor ReviewPersistence: ReviewPersisting {
 
     private func atomicWrite(_ data: Data, to destination: URL) throws {
         let fm = FileManager.default
-        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let temp = directory.appendingPathComponent(".\(destination.lastPathComponent).tmp-\(UUID().uuidString)")
         do {
-            try data.write(to: temp)
+            // Owner-only: drafts carry private comment bodies and paths.
+            // Re-applied after the swap, since replacing an existing file can
+            // keep the old file's mode.
+            guard fm.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
             try replace(temp, destination)
+            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
         } catch {
             try? fm.removeItem(at: temp)
             throw PersistenceError.saveFailed("writing \(destination.lastPathComponent): \(error)")
