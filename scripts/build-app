@@ -49,9 +49,10 @@ iconutil --convert icns --output "$resources_path/AppIcon.icns" "$iconset_path"
 rm -rf "$iconset_path"
 
 # An ad-hoc signature makes the locally built bundle valid without requiring
-# a Developer ID certificate. Release distribution still needs Developer ID
+# a Developer ID certificate; hardened runtime blocks DYLD injection and
+# unsigned library loads. Release distribution still needs Developer ID
 # signing and notarization.
-codesign --force --sign - "$app_path"
+codesign --force --options runtime --sign - "$app_path"
 
 echo "Built: $app_path"
 echo "Launch directly: open \"$app_path\""
