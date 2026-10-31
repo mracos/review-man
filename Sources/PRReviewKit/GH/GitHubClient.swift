@@ -228,12 +228,43 @@ public final class GitHubClient: GitHubServing {
         let reviewDecision: String?
         let url: String
         let author: AuthorDTO
+        let statusCheckRollup: [CheckDTO]?
+    }
+
+    /// One `statusCheckRollup` entry: a check run (`status` + `conclusion`) or
+    /// a commit status context (`state`).
+    private struct CheckDTO: Decodable {
+        let status: String?
+        let conclusion: String?
+        let state: String?
+    }
+
+    private static func checksSummary(_ rollup: [CheckDTO]?) -> PRChecksSummary? {
+        guard let rollup, !rollup.isEmpty else { return nil }
+        var summary = PRChecksSummary(passed: 0, failed: 0, pending: 0)
+        for check in rollup {
+            if let state = check.state {
+                switch state {
+                case "SUCCESS": summary.passed += 1
+                case "PENDING", "EXPECTED": summary.pending += 1
+                default: summary.failed += 1
+                }
+            } else if check.status != "COMPLETED" {
+                summary.pending += 1
+            } else {
+                switch check.conclusion {
+                case "SUCCESS", "NEUTRAL", "SKIPPED": summary.passed += 1
+                default: summary.failed += 1
+                }
+            }
+        }
+        return summary
     }
 
     public func fetchPRInfo(_ ep: PREndpoint) async throws -> PRInfo {
         AppLog.info("github", "Fetching PR metadata for \(ep)")
         let fields = "number,title,body,state,isDraft,headRefOid,headRefName,baseRefName,"
-            + "additions,deletions,changedFiles,reviewDecision,url,author"
+            + "additions,deletions,changedFiles,reviewDecision,url,author,statusCheckRollup"
         let dto: PRInfoDTO = try await runJSON([
             "pr", "view", "--repo", "\(ep.owner)/\(ep.repo)", String(ep.number), "--json", fields,
         ])
@@ -251,7 +282,8 @@ public final class GitHubClient: GitHubServing {
             deletions: dto.deletions,
             changedFiles: dto.changedFiles,
             reviewDecision: dto.reviewDecision,
-            url: dto.url
+            url: dto.url,
+            checks: Self.checksSummary(dto.statusCheckRollup)
         )
         AppLog.info("github", "Fetched metadata for \(ep); state=\(info.state); files=\(info.changedFiles); head=\(info.headRefOid.prefix(12))")
         return info
