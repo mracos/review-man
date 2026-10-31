@@ -27,6 +27,10 @@ public protocol GitHubServing {
     /// Runs the direct `gh` dependency health checks (version, auth, minimal
     /// API probe) and returns an actionable status.
     func dependencyStatus() async -> GitHubDependencyStatus
+    /// Pull requests matching a GitHub search query, across repositories.
+    func searchPullRequests(query: String, first: Int) async throws -> [PRSummary]
+    /// The authenticated user's login and organizations.
+    func fetchViewerScope() async throws -> InboxScope
 }
 
 public extension GitHubServing {
@@ -35,4 +39,10 @@ public extension GitHubServing {
     func dependencyStatus() async -> GitHubDependencyStatus {
         GitHubDependencyStatus(state: .checking)
     }
+
+    /// Default: an empty inbox, so test doubles without one need not
+    /// implement it. `GitHubClient` overrides both.
+    func searchPullRequests(query: String, first: Int) async throws -> [PRSummary] { [] }
+
+    func fetchViewerScope() async throws -> InboxScope { InboxScope(login: "", organizations: []) }
 }

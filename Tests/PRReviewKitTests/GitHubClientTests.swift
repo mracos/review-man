@@ -321,4 +321,54 @@ final class GitHubClientTests: XCTestCase {
             XCTFail("unexpected error: \(error)")
         }
     }
+
+
+    func testSearchPullRequestsDecodesRowsAndSkipsNonPullRequests() async throws {
+        let runner = ScriptedCommandRunner()
+        let pr: [String: Any] = [
+            "id": "PR_1", "number": 7, "title": "Add inbox", "url": "https://github.com/acme/api/pull/7",
+            "isDraft": true, "state": "OPEN", "reviewDecision": "REVIEW_REQUIRED",
+            "updatedAt": "2026-10-30T12:00:00Z", "additions": 10, "deletions": 2,
+            "author": ["login": "u"], "repository": ["nameWithOwner": "acme/api"],
+            "commits": ["nodes": [["commit": ["statusCheckRollup": ["state": "FAILURE"]]]]],
+            "labels": ["nodes": [["name": "agentic-workflows", "color": "7057ff"]]],
+        ]
+        let noChecks: [String: Any] = [
+            "id": "PR_2", "number": 8, "title": "Docs", "url": "https://github.com/acme/web/pull/8",
+            "isDraft": false, "state": "MERGED", "reviewDecision": NSNull(),
+            "updatedAt": "2026-10-29T12:00:00Z", "additions": 1, "deletions": 1,
+            "author": NSNull(), "repository": ["nameWithOwner": "acme/web"],
+            "commits": ["nodes": [["commit": ["statusCheckRollup": NSNull()]]]],
+        ]
+        runner.results = [GH.Result(
+            data: graphQLData(["data": ["search": ["nodes": [pr, [String: Any](), noChecks]]]]),
+            stderr: ""
+        )]
+
+        let rows = try await GitHubClient(commandRunner: runner).searchPullRequests(query: "is:pr author:@me", first: 25)
+
+        XCTAssertEqual(rows.map(\.number), [7, 8])
+        XCTAssertEqual(rows[0].repository, "acme/api")
+        XCTAssertEqual(rows[0].checksState, "FAILURE")
+        XCTAssertEqual(rows[0].labels, [PRLabel(name: "agentic-workflows", color: "7057ff")])
+        XCTAssertEqual(rows[1].labels, [])
+        XCTAssertTrue(rows[0].isDraft)
+        XCTAssertEqual(rows[1].author, "ghost")
+        XCTAssertNil(rows[1].checksState)
+        let args = runner.calls[0]
+        XCTAssertTrue(args.contains("q=is:pr author:@me"))
+        XCTAssertTrue(args.contains("first=25"))
+        XCTAssertFalse((args.first(where: { $0.hasPrefix("query=") }) ?? "").contains("author:@me"))
+    }
+
+    func testFetchViewerScopeReadsLoginAndOrganizations() async throws {
+        let runner = ScriptedCommandRunner()
+        runner.results = [GH.Result(data: graphQLData([
+            "data": ["viewer": ["login": "octocat", "organizations": ["nodes": [["login": "acme"], ["login": "tools"]]]]],
+        ]), stderr: "")]
+
+        let scope = try await GitHubClient(commandRunner: runner).fetchViewerScope()
+
+        XCTAssertEqual(scope, InboxScope(login: "octocat", organizations: ["acme", "tools"]))
+    }
 }

@@ -505,4 +505,100 @@ public final class GitHubClient: GitHubServing {
         _ = try await runGraphQL(query: mutation, variables: ["id": .string(threadID)]) as EmptyData
         AppLog.info("review", "Updated thread resolution for \(ep); threadID=\(threadID); resolved=\(resolved)")
     }
+
+    // MARK: - Inbox
+
+    private static let searchQuery = """
+    query($q: String!, $first: Int!) {
+      search(query: $q, type: ISSUE, first: $first) {
+        nodes {
+          ... on PullRequest {
+            id number title url isDraft state reviewDecision updatedAt additions deletions
+            author { login }
+            repository { nameWithOwner }
+            commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+            labels(first: 10) { nodes { name color } }
+          }
+        }
+      }
+    }
+    """
+
+    private struct GQLSearch: Decodable {
+        struct Search: Decodable { let nodes: [Node] }
+        /// Every field optional: a search node that is not a pull request
+        /// decodes as an empty object.
+        struct Node: Decodable {
+            struct Repository: Decodable { let nameWithOwner: String }
+            struct Commits: Decodable { let nodes: [CommitNode] }
+            struct CommitNode: Decodable { let commit: Commit }
+            struct Commit: Decodable { let statusCheckRollup: Rollup? }
+            struct Rollup: Decodable { let state: String }
+            struct Labels: Decodable { let nodes: [Label] }
+            struct Label: Decodable {
+                let name: String
+                let color: String
+            }
+            let id: String?
+            let number: Int?
+            let title: String?
+            let url: String?
+            let isDraft: Bool?
+            let state: String?
+            let reviewDecision: String?
+            let updatedAt: String?
+            let additions: Int?
+            let deletions: Int?
+            let author: GQLAuthor?
+            let repository: Repository?
+            let commits: Commits?
+            let labels: Labels?
+        }
+        let search: Search
+    }
+
+    public func searchPullRequests(query: String, first: Int) async throws -> [PRSummary] {
+        let data: GQLSearch = try await runGraphQL(query: Self.searchQuery, variables: [
+            "q": .string(query),
+            "first": .string(String(first)),
+        ])
+        let rows = data.search.nodes.compactMap { node -> PRSummary? in
+            guard let id = node.id, let number = node.number, let repository = node.repository else { return nil }
+            return PRSummary(
+                id: id,
+                number: number,
+                title: node.title ?? "",
+                repository: repository.nameWithOwner,
+                author: node.author?.login ?? "ghost",
+                url: node.url ?? "",
+                state: node.state ?? "OPEN",
+                isDraft: node.isDraft ?? false,
+                reviewDecision: node.reviewDecision,
+                checksState: node.commits?.nodes.first?.commit.statusCheckRollup?.state,
+                labels: node.labels?.nodes.map { PRLabel(name: $0.name, color: $0.color) } ?? [],
+                updatedAt: node.updatedAt.flatMap(parseGHDate) ?? Date(),
+                additions: node.additions ?? 0,
+                deletions: node.deletions ?? 0
+            )
+        }
+        AppLog.info("github", "Searched pull requests; rows=\(rows.count)")
+        return rows
+    }
+
+    private struct GQLViewer: Decodable {
+        struct Viewer: Decodable {
+            struct Organizations: Decodable { let nodes: [GQLAuthor] }
+            let login: String
+            let organizations: Organizations
+        }
+        let viewer: Viewer
+    }
+
+    public func fetchViewerScope() async throws -> InboxScope {
+        let data: GQLViewer = try await runGraphQL(
+            query: "query { viewer { login organizations(first: 100) { nodes { login } } } }",
+            variables: [:]
+        )
+        return InboxScope(login: data.viewer.login, organizations: data.viewer.organizations.nodes.map(\.login))
+    }
 }
