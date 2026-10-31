@@ -52,7 +52,9 @@ public struct DiffRowView: View {
     private var rowContent: some View {
         switch displayRow.row {
         case .hunkHeader(let hunkIndex):
-            HunkHeaderView(hunk: file.hunks[hunkIndex])
+            HunkHeaderView(hunk: file.hunks[hunkIndex], hiddenAbove: file.hiddenLinesAbove(hunk: hunkIndex)) { all in
+                store.expandContext(path: file.path, aboveHunk: hunkIndex, all: all)
+            }
         case .line(let hunkIndex, let lineIndex):
             DiffLineView(store: store, file: file, hunkIndex: hunkIndex, lineIndex: lineIndex, languageID: languageID)
         case .thread(let threadID):

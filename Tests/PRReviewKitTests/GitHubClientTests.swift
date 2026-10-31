@@ -321,4 +321,35 @@ final class GitHubClientTests: XCTestCase {
             XCTFail("unexpected error: \(error)")
         }
     }
+
+    func testFetchFileLinesReadsTheRawFileAtACommit() async throws {
+        let runner = ScriptedCommandRunner()
+        runner.results = [GH.Result(data: Data("one\ntwo\n\nfour\n".utf8), stderr: "")]
+
+        let lines = try await GitHubClient(commandRunner: runner)
+            .fetchFileLines(ep, path: "src/a b/c#d.swift", ref: "0123abcd")
+
+        XCTAssertEqual(lines, ["one", "two", "", "four"])
+        XCTAssertEqual(runner.calls[0], [
+            "api", "-H", "Accept: application/vnd.github.raw",
+            "repos/o/r/contents/src/a%20b/c%23d.swift?ref=0123abcd",
+        ])
+    }
+
+    func testFetchFileLinesRefusesPathsAndRefsThatCouldSteerTheRequest() async {
+        let runner = ScriptedCommandRunner()
+        let client = GitHubClient(commandRunner: runner)
+
+        for (path, ref) in [("../secrets", "0123abcd"), ("a/./b", "0123abcd"), ("ok.swift", "main?x=1"), ("", "0123abcd")] {
+            do {
+                _ = try await client.fetchFileLines(ep, path: path, ref: ref)
+                XCTFail("expected refusal for \(path) @ \(ref)")
+            } catch let error as GitHubError {
+                guard case .parse = error else { return XCTFail("expected parse, got \(error)") }
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+        }
+        XCTAssertTrue(runner.calls.isEmpty)
+    }
 }

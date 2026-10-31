@@ -88,6 +88,8 @@ public final class ReviewSessionStore: ObservableObject {
     /// of holding a key on very large files.
     var commentableCache: [String: [DiffRowID]] = [:]
     var hunkIDsCache: [String: [DiffRowID]] = [:]
+    /// Head-file lines fetched for context expansion, keyed `sha:path`.
+    var fileLinesCache: [String: [String]] = [:]
     var linePositionCache: [String: [DiffRowID: (hunk: Int, lineIndex: Int)]] = [:]
     /// Debounced persistence tasks (see `ReviewSessionStoreWorkflows`): rapid
     /// mutations cancel the pending write and schedule a fresh one, so only
@@ -247,7 +249,7 @@ public final class ReviewSessionStore: ObservableObject {
     }
 
     /// Resets per-review derived caches (rendered lines + navigation indexes).
-    private func resetDerivedCaches() {
+    func resetDerivedCaches() {
         diffLineCache.removeAll()
         commentableCache.removeAll()
         hunkIDsCache.removeAll()

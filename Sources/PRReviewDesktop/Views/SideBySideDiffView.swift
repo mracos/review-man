@@ -182,7 +182,9 @@ private struct SideBySideDiffPane: View {
     private func rowView(_ row: SideBySideDiffRow, contentWidth: CGFloat) -> some View {
         switch row {
         case .hunk(let hunkIndex):
-            HunkHeaderView(hunk: file.hunks[hunkIndex])
+            HunkHeaderView(hunk: file.hunks[hunkIndex], hiddenAbove: file.hiddenLinesAbove(hunk: hunkIndex)) { all in
+                store.expandContext(path: file.path, aboveHunk: hunkIndex, all: all)
+            }
                 .frame(width: contentWidth, alignment: .leading)
         case .lines(let hunkIndex, let oldLineIndex, let newLineIndex):
             lineCell(

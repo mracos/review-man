@@ -19,6 +19,7 @@ separate windows and no duplicates for the same repository + PR.
 
 - **Read the diff** with SF Mono, fixed line-number gutters, horizontal
   scrolling, syntax coloring, and word-level change highlighting.
+- **Expand hidden lines**: each hunk header shows how many unchanged lines sit above it; click it to reveal 20 more (Option-click, or "Show all", for the whole gap). Lines come from the file at the PR's head commit, fetched once per file.
 - **Change canvas**: see every changed file as a spatial card with a complete,
   readable patch, status, change density, comment counts, and viewed marks;
   click a card to open the focused diff for line-level comments. Pinch on a
@@ -27,10 +28,8 @@ separate windows and no duplicates for the same repository + PR.
   Small PRs render complete patch cards; once the diff grows past a render
   budget (~2,000 patch rows, 60 files, or ~12k diff lines), cards collapse to
   file-name-only. Demo tiers: `small` stays full; `medium`, `large`, and
-  `xlarge` degrade to file-name cards (`xlarge` to summaries). In the
-  condensed tier, Option-click a file name to expand one patch inline;
-  Option-click it again to collapse. The focused diff always remains the
-  full, commentable view.
+  `xlarge` degrade to file-name cards (`xlarge` to summaries). Click a card to
+  open its focused diff, which is always the full, commentable view.
 - **Comment inline**: click a line and add a draft (deleted lines become
   LEFT-side comments), or Shift-click for a multi-line range comment. Drafts
   are edited and deleted in place, with Undo/Redo, and persist automatically.

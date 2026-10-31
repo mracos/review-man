@@ -505,4 +505,37 @@ public final class GitHubClient: GitHubServing {
         _ = try await runGraphQL(query: mutation, variables: ["id": .string(threadID)]) as EmptyData
         AppLog.info("review", "Updated thread resolution for \(ep); threadID=\(threadID); resolved=\(resolved)")
     }
+
+    // MARK: - File contents
+
+    /// Reads a file's raw contents at `ref`. The path is percent-encoded per
+    /// segment and must not walk (`.`/`..`), and the ref must be a commit SHA,
+    /// so neither can steer the request to another endpoint.
+    public func fetchFileLines(_ ep: PREndpoint, path: String, ref: String) async throws -> [String] {
+        let segments = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        let safeSegment = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        guard !path.isEmpty,
+              segments.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
+              ref.count >= 7, ref.count <= 64,
+              ref.allSatisfy({ $0.isHexDigit }),
+              let encoded = segments
+                .map({ $0.addingPercentEncoding(withAllowedCharacters: safeSegment) })
+                .reduce(Optional(""), { joined, segment in
+                    guard let joined, let segment else { return nil }
+                    return joined.isEmpty ? segment : joined + "/" + segment
+                })
+        else {
+            throw GitHubError.parse("Refusing file request for \(path) at \(ref)")
+        }
+        let result = try await commandRunner.run([
+            "api", "-H", "Accept: application/vnd.github.raw",
+            "repos/\(ep.owner)/\(ep.repo)/contents/\(encoded)?ref=\(ref)",
+        ], timeout: GH.defaultTimeout)
+        var lines = String(decoding: result.data, as: UTF8.self)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.hasSuffix("\r") ? String($0.dropLast()) : String($0) }
+        if lines.last == "" { lines.removeLast() }
+        AppLog.info("github", "Fetched file contents for \(ep); lines=\(lines.count)")
+        return lines
+    }
 }
