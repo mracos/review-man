@@ -370,6 +370,49 @@ final class GitHubClientTests: XCTestCase {
         }
     }
 
+    func testFetchPRInfoSummarizesChecksFromTheSameCall() async throws {
+        let runner = ScriptedCommandRunner()
+        let rollup: [[String: Any]] = [
+            ["__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SUCCESS"],
+            ["__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SKIPPED"],
+            ["__typename": "CheckRun", "status": "COMPLETED", "conclusion": "FAILURE"],
+            ["__typename": "CheckRun", "status": "IN_PROGRESS", "conclusion": ""],
+            ["__typename": "StatusContext", "state": "SUCCESS"],
+            ["__typename": "StatusContext", "state": "PENDING"],
+            ["__typename": "StatusContext", "state": "ERROR"],
+        ]
+        let pr: [String: Any] = [
+            "number": 3, "title": "t", "body": "why", "state": "OPEN", "isDraft": false,
+            "headRefOid": "abc", "headRefName": "h", "baseRefName": "main",
+            "additions": 1, "deletions": 0, "changedFiles": 1, "reviewDecision": "APPROVED",
+            "url": "https://github.com/o/r/pull/3", "author": ["login": "u"],
+            "statusCheckRollup": rollup,
+        ]
+        runner.results = [GH.Result(data: graphQLData(pr), stderr: "")]
+
+        let info = try await GitHubClient(commandRunner: runner).fetchPRInfo(ep)
+
+        XCTAssertEqual(runner.calls.count, 1)
+        XCTAssertTrue(runner.calls[0].joined(separator: " ").contains("statusCheckRollup"))
+        XCTAssertEqual(info.checks, PRChecksSummary(passed: 3, failed: 2, pending: 2))
+    }
+
+    func testFetchPRInfoWithoutChecksHasNoSummary() async throws {
+        let runner = ScriptedCommandRunner()
+        let pr: [String: Any] = [
+            "number": 3, "title": "t", "state": "OPEN", "isDraft": false,
+            "headRefOid": "abc", "headRefName": "h", "baseRefName": "main",
+            "additions": 1, "deletions": 0, "changedFiles": 1,
+            "url": "https://github.com/o/r/pull/3", "author": ["login": "u"],
+            "statusCheckRollup": [[String: Any]](),
+        ]
+        runner.results = [GH.Result(data: graphQLData(pr), stderr: "")]
+
+        let info = try await GitHubClient(commandRunner: runner).fetchPRInfo(ep)
+
+        XCTAssertNil(info.checks)
+    }
+
     func testResolveEndpointAcceptsURLsAndShorthand() async throws {
         let client = GitHubClient(commandRunner: ScriptedCommandRunner())
         let expected = PREndpoint(owner: "o", repo: "r", number: 7)

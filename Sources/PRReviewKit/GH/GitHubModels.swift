@@ -60,11 +60,14 @@ public struct PRInfo {
     public var changedFiles: Int
     public var reviewDecision: String?
     public var url: String
+    /// Nil when the head commit has no checks or status contexts.
+    public var checks: PRChecksSummary?
 
     public init(
         number: Int, title: String, body: String?, author: String, state: String,
         isDraft: Bool, headRefOid: String, headRefName: String, baseRefName: String,
-        additions: Int, deletions: Int, changedFiles: Int, reviewDecision: String?, url: String
+        additions: Int, deletions: Int, changedFiles: Int, reviewDecision: String?, url: String,
+        checks: PRChecksSummary? = nil
     ) {
         self.number = number
         self.title = title
@@ -80,7 +83,23 @@ public struct PRInfo {
         self.changedFiles = changedFiles
         self.reviewDecision = reviewDecision
         self.url = url
+        self.checks = checks
     }
+}
+
+/// CI state of the head commit, counted across check runs and commit statuses.
+public struct PRChecksSummary: Equatable {
+    public var passed: Int
+    public var failed: Int
+    public var pending: Int
+
+    public init(passed: Int, failed: Int, pending: Int) {
+        self.passed = passed
+        self.failed = failed
+        self.pending = pending
+    }
+
+    public var total: Int { passed + failed + pending }
 }
 
 public struct PRComment: Equatable {

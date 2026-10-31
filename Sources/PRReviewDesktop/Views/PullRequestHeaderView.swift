@@ -32,12 +32,29 @@ public struct PullRequestHeaderView: View {
                         Text(decision)
                             .foregroundStyle(.orange)
                     }
+                    if let checks = pr.checks {
+                        checksLabel(checks)
+                    }
                     Spacer()
                     Text(verbatim: "+\(pr.additions)  −\(pr.deletions)  · \(pr.changedFiles) files")
                         .foregroundStyle(.secondary)
                 }
             }
             .font(.caption)
+            if let body = review.pr?.body?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty {
+                // Plain text on purpose: PR bodies are untrusted input, and
+                // nothing in the app renders markdown or loads remote images.
+                DisclosureGroup("Description") {
+                    ScrollView {
+                        Text(body)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 180)
+                }
+                .font(.caption)
+                .accessibilityIdentifier("pr-description")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -59,6 +76,22 @@ public struct PullRequestHeaderView: View {
             .padding(.vertical, 2)
             .background(color.opacity(0.15), in: Capsule())
             .foregroundStyle(color)
+    }
+
+    private func checksLabel(_ checks: PRChecksSummary) -> some View {
+        let (icon, color): (String, SwiftUI.Color) = {
+            if checks.failed > 0 { return ("xmark.circle", .red) }
+            if checks.pending > 0 { return ("clock", .orange) }
+            return ("checkmark.circle", .green)
+        }()
+        let parts = [
+            checks.passed > 0 ? "\(checks.passed) passed" : nil,
+            checks.failed > 0 ? "\(checks.failed) failed" : nil,
+            checks.pending > 0 ? "\(checks.pending) pending" : nil,
+        ].compactMap { $0 }
+        return Label("checks: " + parts.joined(separator: ", "), systemImage: icon)
+            .foregroundStyle(color)
+            .accessibilityIdentifier("pr-checks")
     }
 
     private var reviewDecisionLabel: String? {
