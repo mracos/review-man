@@ -383,6 +383,42 @@ public extension ReviewSessionStore {
         review = review?.withViewed(viewed)
         AppLog.info("review", "Toggled viewed mark; path=\(filePath); isViewed=\(viewed.contains(filePath))")
         persistViewed()
+        pushViewedToGitHub(path: filePath, viewed: viewed.contains(filePath))
+    }
+
+    /// With sync on, adds the files marked viewed on GitHub to the local
+    /// marks. Additive: a file only viewed locally stays viewed.
+    func pullViewedFromGitHub() {
+        guard viewedSync.isEnabled, !demoSession, let endpoint = review?.endpoint else { return }
+        let service = self.service
+        Task { [weak self] in
+            do {
+                let remote = try await service.fetchViewedFiles(endpoint)
+                guard let self, let review = self.review, review.endpoint == endpoint else { return }
+                let merged = review.viewed.union(remote)
+                guard merged != review.viewed else { return }
+                self.review = review.withViewed(merged)
+                self.persistViewed()
+            } catch {
+                AppLog.failure("review", context: "Fetching viewed files from GitHub failed", error: error)
+                self?.banner = SessionBanner(text: "Could not load viewed marks from GitHub: \(error)", isError: true)
+            }
+        }
+    }
+
+    /// With sync on, mirrors one toggle to GitHub. A failure keeps the local
+    /// mark and says so: the local state is still what the reviewer chose.
+    private func pushViewedToGitHub(path: String, viewed: Bool) {
+        guard viewedSync.isEnabled, !demoSession, let pullRequestID = review?.pr?.nodeID else { return }
+        let service = self.service
+        Task { [weak self] in
+            do {
+                try await service.setFileViewed(pullRequestID: pullRequestID, path: path, viewed: viewed)
+            } catch {
+                AppLog.failure("review", context: "Syncing viewed mark to GitHub failed; path=\(path)", error: error)
+                self?.banner = SessionBanner(text: "Viewed mark saved locally but not on GitHub: \(error)", isError: true)
+            }
+        }
     }
 
     // MARK: - Resolve / unresolve (optimistic + rollback)
@@ -620,6 +656,7 @@ public extension ReviewSessionStore {
                 self.selection = ReviewSelection(filePath: kept ?? files.first?.path)
                 self.banner = SessionBanner(text: result.message)
                 self.isBusy = false
+                self.pullViewedFromGitHub()
                 AppLog.info("refresh", "Completed refresh generation=\(generation); selectedPath=\(self.selection.filePath ?? "none"); message=\(result.message)")
             } catch is CancellationError {
                 AppLog.warning("refresh", "Refresh generation=\(generation) cancelled")

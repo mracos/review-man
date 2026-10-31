@@ -27,6 +27,11 @@ public protocol GitHubServing {
     /// Runs the direct `gh` dependency health checks (version, auth, minimal
     /// API probe) and returns an actionable status.
     func dependencyStatus() async -> GitHubDependencyStatus
+    /// Paths the authenticated user marked viewed on GitHub. Files changed
+    /// since they were viewed (`DISMISSED`) are not included.
+    func fetchViewedFiles(_ endpoint: PREndpoint) async throws -> Set<String>
+    /// Marks or unmarks one file as viewed on GitHub.
+    func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws
 }
 
 public extension GitHubServing {
@@ -35,4 +40,10 @@ public extension GitHubServing {
     func dependencyStatus() async -> GitHubDependencyStatus {
         GitHubDependencyStatus(state: .checking)
     }
+
+    /// Default: no remote viewed state, so test doubles that never sync need
+    /// not implement it. `GitHubClient` overrides both.
+    func fetchViewedFiles(_ endpoint: PREndpoint) async throws -> Set<String> { [] }
+
+    func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {}
 }

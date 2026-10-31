@@ -228,12 +228,13 @@ public final class GitHubClient: GitHubServing {
         let reviewDecision: String?
         let url: String
         let author: AuthorDTO
+        let id: String?
     }
 
     public func fetchPRInfo(_ ep: PREndpoint) async throws -> PRInfo {
         AppLog.info("github", "Fetching PR metadata for \(ep)")
         let fields = "number,title,body,state,isDraft,headRefOid,headRefName,baseRefName,"
-            + "additions,deletions,changedFiles,reviewDecision,url,author"
+            + "additions,deletions,changedFiles,reviewDecision,url,author,id"
         let dto: PRInfoDTO = try await runJSON([
             "pr", "view", "--repo", "\(ep.owner)/\(ep.repo)", String(ep.number), "--json", fields,
         ])
@@ -251,7 +252,8 @@ public final class GitHubClient: GitHubServing {
             deletions: dto.deletions,
             changedFiles: dto.changedFiles,
             reviewDecision: dto.reviewDecision,
-            url: dto.url
+            url: dto.url,
+            nodeID: dto.id
         )
         AppLog.info("github", "Fetched metadata for \(ep); state=\(info.state); files=\(info.changedFiles); head=\(info.headRefOid.prefix(12))")
         return info
@@ -504,5 +506,64 @@ public final class GitHubClient: GitHubServing {
         struct EmptyData: Decodable {}
         _ = try await runGraphQL(query: mutation, variables: ["id": .string(threadID)]) as EmptyData
         AppLog.info("review", "Updated thread resolution for \(ep); threadID=\(threadID); resolved=\(resolved)")
+    }
+
+    // MARK: - Viewed files
+
+    private static let viewedFilesQuery = """
+    query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          files(first: 100, after: $cursor) {
+            nodes { path viewerViewedState }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }
+    }
+    """
+
+    private struct GQLViewedFiles: Decodable {
+        struct Repository: Decodable { let pullRequest: PullRequest }
+        struct PullRequest: Decodable { let files: Files }
+        struct Files: Decodable {
+            let nodes: [Node]
+            let pageInfo: GQLPageInfo
+        }
+        struct Node: Decodable {
+            let path: String
+            let viewerViewedState: String
+        }
+        let repository: Repository
+    }
+
+    public func fetchViewedFiles(_ ep: PREndpoint) async throws -> Set<String> {
+        var viewed: Set<String> = []
+        var after: String?
+        repeat {
+            let data: GQLViewedFiles = try await runGraphQL(query: Self.viewedFilesQuery, variables: [
+                "owner": .string(ep.owner),
+                "repo": .string(ep.repo),
+                "number": .string(String(ep.number)),
+                "cursor": after.map { .string($0) } ?? .null,
+            ])
+            let files = data.repository.pullRequest.files
+            viewed.formUnion(files.nodes.filter { $0.viewerViewedState == "VIEWED" }.map(\.path))
+            after = files.pageInfo.hasNextPage ? files.pageInfo.endCursor : nil
+        } while after != nil
+        AppLog.info("github", "Fetched viewed files for \(ep); viewed=\(viewed.count)")
+        return viewed
+    }
+
+    public func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {
+        let mutation = viewed
+            ? "mutation($pullRequestId: ID!, $path: String!) { markFileAsViewed(input: { pullRequestId: $pullRequestId, path: $path }) { clientMutationId } }"
+            : "mutation($pullRequestId: ID!, $path: String!) { unmarkFileAsViewed(input: { pullRequestId: $pullRequestId, path: $path }) { clientMutationId } }"
+        struct EmptyData: Decodable {}
+        _ = try await runGraphQL(query: mutation, variables: [
+            "pullRequestId": .string(pullRequestID),
+            "path": .string(path),
+        ]) as EmptyData
+        AppLog.info("github", "Set viewed=\(viewed) on GitHub; path=\(path)")
     }
 }

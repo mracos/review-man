@@ -32,7 +32,7 @@ struct PRReviewApp: App {
         }
 
         Settings {
-            ShortcutSettingsView()
+            ReviewSettingsView()
         }
     }
 }

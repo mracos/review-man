@@ -95,16 +95,19 @@ public final class ReviewSessionStore: ObservableObject {
     var pendingDraftSave: Task<Void, Never>?
     var pendingViewedSave: Task<Void, Never>?
     var pendingHiddenReviewersSave: Task<Void, Never>?
+    let viewedSync: ViewedSyncPreference
 
     public init(
         service: GitHubServing,
         persistence: ReviewPersisting,
         preference: GitHubExecutablePreference = GitHubExecutablePreference(),
-        dependencyRunner: CommandRunning? = nil
+        dependencyRunner: CommandRunning? = nil,
+        viewedSync: ViewedSyncPreference = ViewedSyncPreference()
     ) {
         self.service = service
         self.persistence = persistence
         self.preference = preference
+        self.viewedSync = viewedSync
         self.dependencyRunner = dependencyRunner
     }
 
@@ -193,6 +196,7 @@ public final class ReviewSessionStore: ObservableObject {
                 self.selection = ReviewSelection(filePath: path)
                 self.state = presentation.files.isEmpty ? .empty : .loaded
                 self.isBusy = false
+                self.pullViewedFromGitHub()
                 AppLog.info("store", "Load generation=\(generation) succeeded; files=\(presentation.files.count); state=\(presentation.files.isEmpty ? "empty" : "loaded")")
             } catch is CancellationError {
                 AppLog.warning("store", "Load generation=\(generation) cancelled")

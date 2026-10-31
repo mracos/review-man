@@ -29,11 +29,14 @@ public struct PRInfo {
     public var changedFiles: Int
     public var reviewDecision: String?
     public var url: String
+    /// GraphQL node ID, needed by mutations that take a pull request ID.
+    public var nodeID: String?
 
     public init(
         number: Int, title: String, body: String?, author: String, state: String,
         isDraft: Bool, headRefOid: String, headRefName: String, baseRefName: String,
-        additions: Int, deletions: Int, changedFiles: Int, reviewDecision: String?, url: String
+        additions: Int, deletions: Int, changedFiles: Int, reviewDecision: String?, url: String,
+        nodeID: String? = nil
     ) {
         self.number = number
         self.title = title
@@ -49,6 +52,7 @@ public struct PRInfo {
         self.changedFiles = changedFiles
         self.reviewDecision = reviewDecision
         self.url = url
+        self.nodeID = nodeID
     }
 }
 
