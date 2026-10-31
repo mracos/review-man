@@ -74,6 +74,13 @@ public struct ReviewCommands: Commands {
             .keyboardShortcut("v", modifiers: [.command, .option])
             .disabled(!availability.canToggleViewed)
 
+            Button("Mark Viewed and Next Unviewed") {
+                focusedStore?.requestFocus = .diff
+                NotificationCenter.default.post(name: .reviewMarkViewedAndNextRequest, object: focusedStore)
+            }
+            .keyboardShortcut("v", modifiers: [.command, .option, .shift])
+            .disabled(!availability.canToggleViewed)
+
             Divider()
 
             Menu("Hide Comments by…") {
@@ -249,6 +256,14 @@ public struct ReviewCommands: Commands {
                 NotificationCenter.default.post(name: .reviewNextFileRequest, object: focusedStore)
             }
             .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+            Button("Previous Unviewed File") {
+                NotificationCenter.default.post(name: .reviewPreviousUnviewedFileRequest, object: focusedStore)
+            }
+            .keyboardShortcut(.upArrow, modifiers: [.command, .option, .control])
+            Button("Next Unviewed File") {
+                NotificationCenter.default.post(name: .reviewNextUnviewedFileRequest, object: focusedStore)
+            }
+            .keyboardShortcut(.downArrow, modifiers: [.command, .option, .control])
             Button("Previous Hunk") {
                 NotificationCenter.default.post(name: .reviewPreviousHunkRequest, object: focusedStore)
             }
@@ -282,6 +297,9 @@ public extension Notification.Name {
     static let reviewReplyRequest = Notification.Name("review.reply")
     static let reviewResolveRequest = Notification.Name("review.resolve")
     static let reviewToggleViewedRequest = Notification.Name("review.toggleViewed")
+    static let reviewMarkViewedAndNextRequest = Notification.Name("review.markViewedAndNext")
+    static let reviewPreviousUnviewedFileRequest = Notification.Name("review.previousUnviewedFile")
+    static let reviewNextUnviewedFileRequest = Notification.Name("review.nextUnviewedFile")
     static let reviewSubmitRequest = Notification.Name("review.submit")
     static let reviewRefreshRequest = Notification.Name("review.refresh")
     static let reviewToggleSidebarRequest = Notification.Name("review.toggleSidebar")

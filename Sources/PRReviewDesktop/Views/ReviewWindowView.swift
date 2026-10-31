@@ -63,6 +63,7 @@ public struct ReviewWindowView: View {
             showCanvas: $showCanvas,
             diffPresentation: $diffPresentation
         ))
+        .modifier(ViewedNavigationCommandRouting(store: store))
         .toolbar { toolbarContent }
         .onChange(of: store.requestFocus) { _ in
             if store.requestFocus == .sidebarSearch {
@@ -380,7 +381,11 @@ public struct ReviewWindowView: View {
                         }
 
                         if !showCanvas, let file = store.selectedFile {
-                            DiffView(store: store, file: file, presentation: $diffPresentation)
+                            VStack(spacing: 0) {
+                                FocusedFileBar(store: store, file: file)
+                                Divider()
+                                DiffView(store: store, file: file, presentation: $diffPresentation)
+                            }
                         } else if !showCanvas {
                             EmptyStateView(
                                 icon: "sidebar.left",
@@ -558,6 +563,33 @@ private struct DiffPresentationCommandRouting: ViewModifier {
             }
             showCanvas = false
         }
+    }
+
+    private func matches(_ note: Notification) -> Bool {
+        guard let object = note.object as? ReviewSessionStore else { return true }
+        return object === store
+    }
+}
+
+/// Viewed-aware file navigation, kept out of `CommandRoutingModifier` for the
+/// same type-checker reason as `DiffPresentationCommandRouting`.
+private struct ViewedNavigationCommandRouting: ViewModifier {
+    @ObservedObject var store: ReviewSessionStore
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .reviewPreviousUnviewedFileRequest)) { note in
+                guard matches(note) else { return }
+                store.selectPreviousUnviewedFile()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reviewNextUnviewedFileRequest)) { note in
+                guard matches(note) else { return }
+                store.selectNextUnviewedFile()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reviewMarkViewedAndNextRequest)) { note in
+                guard matches(note) else { return }
+                store.markViewedAndAdvance()
+            }
     }
 
     private func matches(_ note: Notification) -> Bool {

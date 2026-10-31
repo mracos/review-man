@@ -129,6 +129,61 @@ final class ReviewCommandTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testUnviewedNavigationSkipsViewedFilesAndWraps() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        let paths = store.review?.files.map(\.path) ?? []
+        XCTAssertEqual(paths.count, 3)
+        store.toggleViewed(filePath: paths[1])
+
+        store.select(filePath: paths[0])
+        store.selectNextUnviewedFile()
+        XCTAssertEqual(store.selection.filePath, paths[2])
+
+        store.selectNextUnviewedFile()
+        XCTAssertEqual(store.selection.filePath, paths[0])
+
+        store.selectPreviousUnviewedFile()
+        XCTAssertEqual(store.selection.filePath, paths[2])
+    }
+
+    @MainActor
+    func testMarkViewedAndAdvanceStopsWhenEverythingIsViewed() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        let paths = store.review?.files.map(\.path) ?? []
+        store.toggleViewed(filePath: paths[1])
+        store.select(filePath: paths[0])
+
+        store.markViewedAndAdvance()
+        XCTAssertEqual(store.review?.viewed, [paths[0], paths[1]])
+        XCTAssertEqual(store.selection.filePath, paths[2])
+
+        store.markViewedAndAdvance()
+        XCTAssertEqual(store.review?.viewed, Set(paths))
+        XCTAssertEqual(store.selection.filePath, paths[2])
+
+        store.markViewedAndAdvance()
+        XCTAssertEqual(store.review?.viewed, Set(paths), "an already viewed file stays viewed")
+    }
+
+    private var threeFileDiff: String {
+        sampleDiff + """
+
+        diff --git a/README.md b/README.md
+        --- a/README.md
+        +++ b/README.md
+        @@ -1,1 +1,2 @@
+         # Title
+        +New line
+        diff --git a/NOTES.md b/NOTES.md
+        --- a/NOTES.md
+        +++ b/NOTES.md
+        @@ -1,1 +1,2 @@
+         # Notes
+        +Another line
+        """
+    }
+
     // MARK: - Escape precedence
 
     @MainActor
