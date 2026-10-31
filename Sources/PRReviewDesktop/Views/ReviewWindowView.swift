@@ -6,6 +6,9 @@ import PRReviewKit
 /// store as the focused command target and routes command notifications.
 public struct ReviewWindowView: View {
     @ObservedObject public var store: ReviewSessionStore
+    @ObservedObject public var inbox: InboxStore
+    /// Which list the sidebar shows; the inbox until a file filter is asked for.
+    @State private var sidebarTab: SidebarTab = .inbox
     @State private var showOpenSheet = false
     @State private var sheetReference = ""
     @State private var sidebarVisible = false
@@ -21,16 +24,22 @@ public struct ReviewWindowView: View {
     /// Editable copy of the failed reference shown in the error state.
     @State private var failureReference = ""
 
-    public init(store: ReviewSessionStore) {
+    public init(store: ReviewSessionStore, inbox: InboxStore) {
         self.store = store
+        self.inbox = inbox
     }
 
     public var body: some View {
         Group {
             switch store.state {
             case .welcome:
-                OpenPullRequestView(store: store)
-                    .frame(minWidth: 480, minHeight: 360)
+                NavigationSplitView {
+                    InboxSidebarView(inbox: inbox, store: store)
+                        .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 420)
+                } detail: {
+                    OpenPullRequestView(store: store)
+                        .frame(minWidth: 480, minHeight: 360)
+                }
             case .loading(let reference):
                 loadingView(reference: reference)
             case .loaded, .empty:
@@ -67,6 +76,7 @@ public struct ReviewWindowView: View {
         .onChange(of: store.requestFocus) { _ in
             if store.requestFocus == .sidebarSearch {
                 sidebarVisible = true   // reveal the search surface if hidden
+                sidebarTab = .files
                 focusSidebarSearch = true
             }
             if store.requestFocus != .none { store.requestFocus = .none }
@@ -317,12 +327,27 @@ public struct ReviewWindowView: View {
 
     private var loadedShell: some View {
         NavigationSplitView(columnVisibility: sidebarBinding) {
-            FileSidebarView(
-                store: store,
-                showCanvas: $showCanvas,
-                focusSearch: $focusSidebarSearch
-            )
-                .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 380)
+            VStack(spacing: 0) {
+                Picker("Sidebar", selection: $sidebarTab) {
+                    Text("Inbox").tag(SidebarTab.inbox)
+                    Text("Files").tag(SidebarTab.files)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(8)
+                .accessibilityIdentifier("sidebar-tab")
+                switch sidebarTab {
+                case .inbox:
+                    InboxSidebarView(inbox: inbox, store: store)
+                case .files:
+                    FileSidebarView(
+                        store: store,
+                        showCanvas: $showCanvas,
+                        focusSearch: $focusSidebarSearch
+                    )
+                }
+            }
+                .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 400)
         } detail: {
             detailPane
         }
@@ -564,4 +589,10 @@ private struct DiffPresentationCommandRouting: ViewModifier {
         guard let object = note.object as? ReviewSessionStore else { return true }
         return object === store
     }
+}
+
+/// The sidebar's two lists.
+enum SidebarTab: Hashable {
+    case inbox
+    case files
 }

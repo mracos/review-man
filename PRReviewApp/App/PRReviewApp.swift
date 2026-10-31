@@ -12,7 +12,8 @@ struct PRReviewApp: App {
 
     var body: some Scene {
         WindowGroup("PR Review", for: String.self) { $key in
-            ReviewWindowView(store: coordinator.store(for: key))
+            ReviewWindowView(store: coordinator.store(for: key), inbox: coordinator.inbox)
+                .task { coordinator.startInbox() }
                 .background(OpenWindowProxy())
                 .environmentObject(coordinator)
                 .onOpenURL { url in
@@ -53,6 +54,17 @@ final class AppCoordinator: ObservableObject {
     /// every lookup, keeping the dictionary from growing with closed windows.
     private var stores: [String: WeakStoreBox] = [:]
     private let autoOpenDemoRequest: DemoAutoOpen?
+
+    /// One inbox for every window, on the same `gh` resolution as the stores.
+    let inbox = InboxStore(service: GitHubClient(
+        resolver: GitHubExecutableResolver(overrideURL: GitHubExecutablePreference().selectedExecutableURL)
+    ))
+
+    /// Starts inbox polling, except in offline demo launches.
+    func startInbox() {
+        guard !CommandLine.arguments.contains("--demo") else { return }
+        inbox.startPolling()
+    }
 
     /// Parses the demo launch arguments once. `--demo` opens the offline demo
     /// at the `.large` load-test scale by default; `--demo-scale
