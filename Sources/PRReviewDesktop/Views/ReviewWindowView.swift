@@ -64,6 +64,7 @@ public struct ReviewWindowView: View {
             diffPresentation: $diffPresentation
         ))
         .modifier(ViewedNavigationCommandRouting(store: store))
+        .modifier(NavigationHistoryRouting(store: store, showCanvas: $showCanvas))
         .toolbar { toolbarContent }
         .onChange(of: store.requestFocus) { _ in
             if store.requestFocus == .sidebarSearch {
@@ -590,6 +591,52 @@ private struct ViewedNavigationCommandRouting: ViewModifier {
                 guard matches(note) else { return }
                 store.markViewedAndAdvance()
             }
+    }
+
+    private func matches(_ note: Notification) -> Bool {
+        guard let object = note.object as? ReviewSessionStore else { return true }
+        return object === store
+    }
+}
+
+/// Records where the window looks (canvas or a file) and serves Back/Forward.
+/// History starts over whenever a different pull request loads.
+private struct NavigationHistoryRouting: ViewModifier {
+    @ObservedObject var store: ReviewSessionStore
+    @Binding var showCanvas: Bool
+    @State private var history = NavigationHistory<ReviewLocation>()
+
+    private var location: ReviewLocation {
+        if showCanvas { return .canvas }
+        return store.selection.filePath.map(ReviewLocation.file) ?? .canvas
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { history.visit(location) }
+            .onChange(of: location) { history.visit($0) }
+            .onChange(of: store.review?.pr?.url) { _ in
+                history.reset()
+                history.visit(location)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reviewNavigateBackRequest)) { note in
+                guard matches(note) else { return }
+                history.back().map(go)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reviewNavigateForwardRequest)) { note in
+                guard matches(note) else { return }
+                history.forward().map(go)
+            }
+    }
+
+    private func go(_ target: ReviewLocation) {
+        switch target {
+        case .canvas:
+            showCanvas = true
+        case .file(let path):
+            store.select(filePath: path)
+            showCanvas = false
+        }
     }
 
     private func matches(_ note: Notification) -> Bool {

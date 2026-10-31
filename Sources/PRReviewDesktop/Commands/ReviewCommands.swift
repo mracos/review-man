@@ -256,6 +256,14 @@ public struct ReviewCommands: Commands {
                 NotificationCenter.default.post(name: .reviewNextFileRequest, object: focusedStore)
             }
             .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+            Button("Back") {
+                NotificationCenter.default.post(name: .reviewNavigateBackRequest, object: focusedStore)
+            }
+            .keyboardShortcut("[", modifiers: [.command])
+            Button("Forward") {
+                NotificationCenter.default.post(name: .reviewNavigateForwardRequest, object: focusedStore)
+            }
+            .keyboardShortcut("]", modifiers: [.command])
             Button("Previous Unviewed File") {
                 NotificationCenter.default.post(name: .reviewPreviousUnviewedFileRequest, object: focusedStore)
             }
@@ -300,6 +308,8 @@ public extension Notification.Name {
     static let reviewMarkViewedAndNextRequest = Notification.Name("review.markViewedAndNext")
     static let reviewPreviousUnviewedFileRequest = Notification.Name("review.previousUnviewedFile")
     static let reviewNextUnviewedFileRequest = Notification.Name("review.nextUnviewedFile")
+    static let reviewNavigateBackRequest = Notification.Name("review.navigateBack")
+    static let reviewNavigateForwardRequest = Notification.Name("review.navigateForward")
     static let reviewSubmitRequest = Notification.Name("review.submit")
     static let reviewRefreshRequest = Notification.Name("review.refresh")
     static let reviewToggleSidebarRequest = Notification.Name("review.toggleSidebar")
