@@ -241,9 +241,23 @@ private enum AppKitDiffRowRenderer {
             guard hunkIndex < file.hunks.count else { return }
             palette.hunkHeaderBackground.setFill()
             rect.fill()
+            // The expand hint leads and the header follows it, so the two
+            // never overlap however large the text gets.
+            var textRect = rect.insetBy(dx: 8, dy: 3)
+            let hidden = file.hiddenLinesAbove(hunk: hunkIndex)
+            if hidden > 0 {
+                let step = min(ReviewSessionStore.contextExpansionStep, hidden)
+                let hint = hidden > step
+                    ? "Show \(step) more of \(hidden) (Option: all)"
+                    : "Show \(hidden) hidden lines"
+                let hintWidth = (hint as NSString).size(withAttributes: [.font: fonts.header]).width.rounded(.up)
+                drawText(hint, in: textRect, font: fonts.header, color: .linkColor)
+                textRect.origin.x += hintWidth + 16
+                textRect.size.width = max(0, textRect.width - hintWidth - 16)
+            }
             drawText(
                 file.hunks[hunkIndex].header,
-                in: rect.insetBy(dx: 8, dy: 3),
+                in: textRect,
                 font: fonts.header,
                 color: palette.hunkHeaderForeground
             )
@@ -591,6 +605,14 @@ private final class AppKitDiffSurfaceNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        if let hunkIndex = expandableHunkHit(at: event) {
+            store?.expandContext(
+                path: snapshot.file.path,
+                aboveHunk: hunkIndex,
+                all: event.modifierFlags.contains(.option)
+            )
+            return
+        }
         guard let hit = lineHit(at: event) else { return }
         selectLine(
             hunkIndex: hit.hunkIndex,
@@ -761,6 +783,15 @@ private final class AppKitDiffSurfaceNSView: NSView {
         updateAccessibilityRows()
         NSAccessibility.post(element: self, notification: .selectedChildrenChanged)
         needsDisplay = true
+    }
+
+    /// The hunk whose header was clicked, when it has hidden lines above it.
+    private func expandableHunkHit(at event: NSEvent) -> Int? {
+        let point = convert(event.locationInWindow, from: nil)
+        guard let positioned = snapshot.layout.row(atY: point.y),
+              case .hunkHeader(let hunkIndex) = positioned.row.row,
+              snapshot.file.hiddenLinesAbove(hunk: hunkIndex) > 0 else { return nil }
+        return hunkIndex
     }
 
     private func lineHit(at event: NSEvent) -> (

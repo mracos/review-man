@@ -385,6 +385,58 @@ public extension ReviewSessionStore {
         persistViewed()
     }
 
+    // MARK: - Context expansion
+
+    /// Lines revealed per click; `all` reveals the whole gap.
+    nonisolated static let contextExpansionStep = 20
+
+    /// Reveals hidden unchanged lines above hunk `hunkIndex` of `path`, read
+    /// from the head version of the file (fetched once per head SHA).
+    func expandContext(path: String, aboveHunk hunkIndex: Int, all: Bool = false) {
+        guard let review, let endpoint = review.endpoint, let sha = review.pr?.headRefOid,
+              let file = review.files.first(where: { $0.path == path }),
+              file.hiddenLinesAbove(hunk: hunkIndex) > 0 else { return }
+        guard !demoSession else {
+            banner = SessionBanner(text: "Hidden lines are not available in the demo.")
+            return
+        }
+        let key = "\(sha):\(path)"
+        let service = self.service
+        Task { [weak self] in
+            do {
+                let lines: [String]
+                if let cached = self?.fileLinesCache[key] {
+                    lines = cached
+                } else {
+                    lines = try await service.fetchFileLines(endpoint, path: path, ref: sha)
+                    self?.fileLinesCache[key] = lines
+                }
+                self?.applyContextExpansion(path: path, hunkIndex: hunkIndex, all: all, sha: sha, lines: lines)
+            } catch {
+                AppLog.failure("review", context: "Loading hidden lines failed; path=\(path)", error: error)
+                self?.banner = SessionBanner(text: "Could not load hidden lines: \(error)", isError: true)
+            }
+        }
+    }
+
+    private func applyContextExpansion(path: String, hunkIndex: Int, all: Bool, sha: String, lines: [String]) {
+        guard let review, review.pr?.headRefOid == sha,
+              let index = review.files.firstIndex(where: { $0.path == path }) else { return }
+        let file = review.files[index]
+        let count = all ? file.hiddenLinesAbove(hunk: hunkIndex) : Self.contextExpansionStep
+        let expanded = file.expandingContext(aboveHunk: hunkIndex, count: count, newFileLines: lines)
+        guard expanded != file else { return }
+        var files = review.files
+        files[index] = expanded
+        resetDerivedCaches()
+        self.review = ReviewPresentation(
+            endpoint: review.endpoint, pr: review.pr, files: files, threads: review.threads,
+            drafts: review.drafts, viewed: review.viewed, hiddenReviewers: review.hiddenReviewers
+        )
+        selection.rowID = nil
+        AppLog.info("review", "Expanded context; path=\(path); hunk=\(hunkIndex); revealed=\(min(count, file.hiddenLinesAbove(hunk: hunkIndex)))")
+    }
+
     // MARK: - Resolve / unresolve (optimistic + rollback)
 
     /// Toggles a thread's resolved state optimistically, then syncs with

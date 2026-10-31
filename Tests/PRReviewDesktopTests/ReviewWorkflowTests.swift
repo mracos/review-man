@@ -20,6 +20,8 @@ private final class WorkflowService: GitHubServing {
     var resolveError: Error?
     var replyError: Error?
     private(set) var submitCalls: [(commitID: String, event: String, draftCount: Int)] = []
+    var fileLines: [String] = []
+    private(set) var fileFetches: [String] = []
 
     func ensureAvailable() async throws {}
     func resolveEndpoint(from argument: String) async throws -> PREndpoint {
@@ -37,6 +39,10 @@ private final class WorkflowService: GitHubServing {
     }
     func resolveThread(_ ep: PREndpoint, threadID: String, resolved: Bool) async throws {
         if let resolveError { throw resolveError }
+    }
+    func fetchFileLines(_ ep: PREndpoint, path: String, ref: String) async throws -> [String] {
+        fileFetches.append("\(path)@\(ref)")
+        return fileLines
     }
 }
 
@@ -388,6 +394,60 @@ final class ReviewWorkflowTests: XCTestCase {
         store.toggleViewed(filePath: "Src.swift")
         XCTAssertTrue(store.review?.viewed.contains("Src.swift") ?? false)
         waitSync { (persistence.savedViewed(for: ep, sha: "sha1") ?? []).contains("Src.swift") }
+    }
+
+    // MARK: - Context expansion
+
+    /// A 60-line file changed at line 50: one hunk with 46 lines hidden above.
+    private func makeExpandableStore() -> (WorkflowService, ReviewSessionStore) {
+        let diff = """
+        diff --git a/Big.swift b/Big.swift
+        --- a/Big.swift
+        +++ b/Big.swift
+        @@ -47,7 +47,7 @@
+         line 47
+         line 48
+         line 49
+        -old 50
+        +new 50
+         line 51
+         line 52
+         line 53
+        """
+        let service = WorkflowService()
+        service.bundle = FetchBundle(pr: makePRInfo(), files: DiffParser.parse(diff), threads: [])
+        service.fileLines = (1...60).map { $0 == 50 ? "new 50" : "line \($0)" }
+        let store = ReviewSessionStore(service: service, persistence: WorkflowPersistence())
+        store.open(reference: "o/r#1")
+        waitSync { store.state == .loaded }
+        return (service, store)
+    }
+
+    private func hidden(_ store: ReviewSessionStore) -> Int {
+        store.review?.files.first?.hiddenLinesAbove(hunk: 0) ?? -1
+    }
+
+    func testExpandingContextRevealsTwentyLinesAndFetchesTheFileOnce() {
+        let (service, store) = makeExpandableStore()
+        XCTAssertEqual(hidden(store), 46)
+
+        store.expandContext(path: "Big.swift", aboveHunk: 0)
+        waitSync { self.hidden(store) == 26 }
+        store.expandContext(path: "Big.swift", aboveHunk: 0)
+        waitSync { self.hidden(store) == 6 }
+
+        XCTAssertEqual(hidden(store), 6)
+        XCTAssertEqual(service.fileFetches, ["Big.swift@sha1"])
+        XCTAssertEqual(store.review?.files.first?.lineCount, 8 + 40)
+    }
+
+    func testExpandingAllContextClosesTheGap() {
+        let (_, store) = makeExpandableStore()
+
+        store.expandContext(path: "Big.swift", aboveHunk: 0, all: true)
+
+        waitSync { self.hidden(store) == 0 }
+        XCTAssertEqual(store.review?.files.first?.hunks.first?.newStart, 1)
     }
 
     /// Rapid viewed toggles coalesce into one debounced disk write: the last
