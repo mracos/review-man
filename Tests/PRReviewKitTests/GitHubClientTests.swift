@@ -413,6 +413,52 @@ final class GitHubClientTests: XCTestCase {
         XCTAssertNil(info.checks)
     }
 
+    func testFetchViewedFilesKeepsOnlyViewedAcrossPages() async throws {
+        func page(_ nodes: [(String, String)], next: String?) -> Data {
+            graphQLData([
+                "data": ["repository": ["pullRequest": ["files": [
+                    "nodes": nodes.map { ["path": $0.0, "viewerViewedState": $0.1] },
+                    "pageInfo": ["hasNextPage": next != nil, "endCursor": next as Any],
+                ]]]],
+            ])
+        }
+        let runner = ScriptedCommandRunner()
+        runner.results = [
+            GH.Result(data: page([("a.swift", "VIEWED"), ("b.swift", "DISMISSED")], next: "cursor-1"), stderr: ""),
+            GH.Result(data: page([("c.swift", "VIEWED"), ("d.swift", "UNVIEWED")], next: nil), stderr: ""),
+        ]
+
+        let viewed = try await GitHubClient(commandRunner: runner).fetchViewedFiles(ep)
+
+        XCTAssertEqual(viewed, ["a.swift", "c.swift"])
+        XCTAssertEqual(runner.calls.count, 2)
+        XCTAssertTrue(runner.calls[0].contains("cursor=null"))
+        XCTAssertTrue(runner.calls[1].contains("cursor=cursor-1"))
+        XCTAssertTrue(runner.calls[0].contains("owner=o"))
+    }
+
+    func testSetFileViewedUsesTheMatchingMutationWithVariables() async throws {
+        let runner = ScriptedCommandRunner()
+        runner.results = [
+            GH.Result(data: Data(#"{"data":{}}"#.utf8), stderr: ""),
+            GH.Result(data: Data(#"{"data":{}}"#.utf8), stderr: ""),
+        ]
+        let client = GitHubClient(commandRunner: runner)
+
+        try await client.setFileViewed(pullRequestID: "PR_1", path: "a.swift", viewed: true)
+        try await client.setFileViewed(pullRequestID: "PR_1", path: "a.swift", viewed: false)
+
+        let mark = runner.calls[0].first(where: { $0.hasPrefix("query=") }) ?? ""
+        let unmark = runner.calls[1].first(where: { $0.hasPrefix("query=") }) ?? ""
+        XCTAssertTrue(mark.contains("markFileAsViewed") && !mark.contains("unmarkFileAsViewed"))
+        XCTAssertTrue(unmark.contains("unmarkFileAsViewed"))
+        for call in runner.calls {
+            XCTAssertTrue(call.contains("pullRequestId=PR_1"))
+            XCTAssertTrue(call.contains("path=a.swift"))
+            XCTAssertFalse((call.first(where: { $0.hasPrefix("query=") }) ?? "").contains("a.swift"))
+        }
+    }
+
     func testFetchFileLinesReadsTheRawFileAtACommit() async throws {
         let runner = ScriptedCommandRunner()
         runner.results = [GH.Result(data: Data("one\ntwo\n\nfour\n".utf8), stderr: "")]

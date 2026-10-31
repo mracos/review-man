@@ -19,7 +19,9 @@ private final class WorkflowService: GitHubServing {
     var fetchError: Error?
     var resolveError: Error?
     var replyError: Error?
+    var viewedOnGitHub: Set<String> = []
     private(set) var submitCalls: [(commitID: String, event: String, draftCount: Int)] = []
+    private(set) var setViewedCalls: [String] = []
     var fileLines: [String] = []
     private(set) var fileFetches: [String] = []
 
@@ -40,9 +42,15 @@ private final class WorkflowService: GitHubServing {
     func resolveThread(_ ep: PREndpoint, threadID: String, resolved: Bool) async throws {
         if let resolveError { throw resolveError }
     }
+    func fetchViewedFiles(_ ep: PREndpoint) async throws -> Set<String> {
+        viewedOnGitHub
+    }
     func fetchFileLines(_ ep: PREndpoint, path: String, ref: String) async throws -> [String] {
         fileFetches.append("\(path)@\(ref)")
         return fileLines
+    }
+    func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {
+        setViewedCalls.append("\(pullRequestID) \(path) \(viewed)")
     }
 }
 
@@ -98,7 +106,7 @@ private func makePRInfo(sha: String = "sha1") -> PRInfo {
     PRInfo(number: 1, title: "PR", body: nil, author: "a", state: "OPEN", isDraft: false,
            headRefOid: sha, headRefName: "head", baseRefName: "base",
            additions: 10, deletions: 4, changedFiles: 1, reviewDecision: nil,
-           url: "https://github.com/o/r/pull/1")
+           url: "https://github.com/o/r/pull/1", nodeID: "PR_1")
 }
 
 private let sampleDiff = """
@@ -117,11 +125,18 @@ final class ReviewWorkflowTests: XCTestCase {
 
     private let ep = PREndpoint(owner: "o", repo: "r", number: 1)
 
-    private func makeRealStore() -> (service: WorkflowService, persistence: WorkflowPersistence, store: ReviewSessionStore) {
+    private func makeRealStore(
+        viewedOnGitHub: Set<String> = [],
+        syncViewed: Bool = false
+    ) -> (service: WorkflowService, persistence: WorkflowPersistence, store: ReviewSessionStore) {
         let service = WorkflowService()
         service.bundle = FetchBundle(pr: makePRInfo(), files: DiffParser.parse(sampleDiff), threads: [])
+        service.viewedOnGitHub = viewedOnGitHub
         let persistence = WorkflowPersistence()
-        let store = ReviewSessionStore(service: service, persistence: persistence)
+        let defaults = UserDefaults(suiteName: "viewed-sync-\(UUID().uuidString)")!
+        let viewedSync = ViewedSyncPreference(defaults: defaults)
+        viewedSync.isEnabled = syncViewed
+        let store = ReviewSessionStore(service: service, persistence: persistence, viewedSync: viewedSync)
         store.open(reference: "o/r#1")
         waitSync { store.state == .loaded }
         return (service, persistence, store)
@@ -394,6 +409,27 @@ final class ReviewWorkflowTests: XCTestCase {
         store.toggleViewed(filePath: "Src.swift")
         XCTAssertTrue(store.review?.viewed.contains("Src.swift") ?? false)
         waitSync { (persistence.savedViewed(for: ep, sha: "sha1") ?? []).contains("Src.swift") }
+    }
+
+    func testViewedSyncOffNeverTouchesGitHub() {
+        let (service, _, store) = makeRealStore(viewedOnGitHub: ["Src.swift"])
+
+        store.toggleViewed(filePath: "Src.swift")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertEqual(store.review?.viewed, ["Src.swift"], "GitHub marks are not merged when sync is off")
+        XCTAssertTrue(service.setViewedCalls.isEmpty)
+    }
+
+    func testViewedSyncMergesGitHubMarksOnLoadAndPushesToggles() {
+        let (service, _, store) = makeRealStore(viewedOnGitHub: ["Src.swift"], syncViewed: true)
+        waitSync { store.review?.viewed.contains("Src.swift") ?? false }
+        XCTAssertEqual(store.review?.viewed, ["Src.swift"])
+
+        store.toggleViewed(filePath: "Src.swift")
+
+        waitSync { !service.setViewedCalls.isEmpty }
+        XCTAssertEqual(service.setViewedCalls, ["PR_1 Src.swift false"])
     }
 
     // MARK: - Context expansion

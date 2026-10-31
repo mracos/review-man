@@ -62,12 +62,14 @@ public struct PRInfo {
     public var url: String
     /// Nil when the head commit has no checks or status contexts.
     public var checks: PRChecksSummary?
+    /// GraphQL node ID, needed by mutations that take a pull request ID.
+    public var nodeID: String?
 
     public init(
         number: Int, title: String, body: String?, author: String, state: String,
         isDraft: Bool, headRefOid: String, headRefName: String, baseRefName: String,
         additions: Int, deletions: Int, changedFiles: Int, reviewDecision: String?, url: String,
-        checks: PRChecksSummary? = nil
+        checks: PRChecksSummary? = nil, nodeID: String? = nil
     ) {
         self.number = number
         self.title = title
@@ -84,6 +86,7 @@ public struct PRInfo {
         self.reviewDecision = reviewDecision
         self.url = url
         self.checks = checks
+        self.nodeID = nodeID
     }
 }
 
