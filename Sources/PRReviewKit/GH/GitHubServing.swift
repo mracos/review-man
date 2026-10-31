@@ -32,6 +32,10 @@ public protocol GitHubServing {
     func fetchViewedFiles(_ endpoint: PREndpoint) async throws -> Set<String>
     /// Marks or unmarks one file as viewed on GitHub.
     func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws
+    /// Pull requests matching a GitHub search query, across repositories.
+    func searchPullRequests(query: String, first: Int) async throws -> [PRSummary]
+    /// The authenticated user's login and organizations.
+    func fetchViewerScope() async throws -> InboxScope
     /// A file's lines at a commit, for revealing context between hunks.
     func fetchFileLines(_ endpoint: PREndpoint, path: String, ref: String) async throws -> [String]
 }
@@ -48,6 +52,12 @@ public extension GitHubServing {
     func fetchViewedFiles(_ endpoint: PREndpoint) async throws -> Set<String> { [] }
 
     func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {}
+
+    /// Default: an empty inbox, so test doubles without one need not
+    /// implement it. `GitHubClient` overrides both.
+    func searchPullRequests(query: String, first: Int) async throws -> [PRSummary] { [] }
+
+    func fetchViewerScope() async throws -> InboxScope { InboxScope(login: "", organizations: []) }
 
     /// Default: no file content, so doubles that never expand context need
     /// not implement it. `GitHubClient` overrides it.

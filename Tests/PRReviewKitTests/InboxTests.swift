@@ -1,0 +1,68 @@
+import XCTest
+@testable import PRReviewKit
+
+final class InboxTests: XCTestCase {
+
+    func testSectionQueriesUseTheViewerAndSortByUpdate() {
+        let filter = InboxFilter()
+
+        XCTAssertEqual(
+            InboxSection.reviewRequested.searchQuery(filter: filter),
+            "is:pr is:open archived:false review-requested:@me sort:updated-desc"
+        )
+        XCTAssertEqual(
+            InboxSection.myOpen.searchQuery(filter: filter),
+            "is:pr is:open archived:false author:@me sort:updated-desc"
+        )
+        XCTAssertEqual(
+            InboxSection.mine.searchQuery(filter: filter),
+            "is:pr archived:false author:@me sort:updated-desc"
+        )
+    }
+
+    func testTeamSearchesTheChosenOrganizationsOnly() {
+        XCTAssertNil(InboxSection.team.searchQuery(filter: InboxFilter()))
+        XCTAssertEqual(
+            InboxSection.team.searchQuery(filter: InboxFilter(teamOrganizations: ["acme", "tools"])),
+            "is:pr is:open archived:false org:acme org:tools sort:updated-desc"
+        )
+    }
+
+    /// Filters are part of the search, so each section's page of results is
+    /// already the filtered set.
+    func testLabelsAndHiddenRepositoriesNarrowEverySearch() {
+        let filter = InboxFilter(labels: ["agentic-workflows", "ai review"], hiddenRepositories: ["acme/legacy"])
+
+        XCTAssertEqual(
+            InboxSection.myOpen.searchQuery(filter: filter),
+            "is:pr is:open archived:false author:@me label:\"agentic-workflows\",\"ai review\" -repo:acme/legacy sort:updated-desc"
+        )
+    }
+
+    func testQualifierValuesCannotBreakOutOfTheSearch() {
+        let filter = InboxFilter(
+            labels: ["a\" org:evil"],
+            hiddenRepositories: ["acme/web repo:evil/x", "not a repo"],
+            teamOrganizations: ["acme", "acme org:evil"]
+        )
+
+        let query = InboxSection.myOpen.searchQuery(filter: filter) ?? ""
+        let team = InboxSection.team.searchQuery(filter: filter) ?? ""
+
+        XCTAssertTrue(query.contains("label:\"a org:evil\""), query)
+        XCTAssertFalse(query.contains("repo:evil"), query)
+        XCTAssertTrue(team.contains("org:acme "), team)
+        XCTAssertFalse(team.replacingOccurrences(of: "label:\"a org:evil\"", with: "").contains("org:evil"), team)
+        XCTAssertNil(InboxSection.team.searchQuery(filter: InboxFilter(teamOrganizations: ["bad org"])))
+    }
+
+    func testSummaryEndpointComesFromTheRepository() {
+        let summary = PRSummary(
+            id: "PR_1", number: 7, title: "t", repository: "acme/api", author: "u",
+            url: "https://github.com/acme/api/pull/7", state: "OPEN", isDraft: false,
+            reviewDecision: nil, checksState: nil, labels: [], updatedAt: Date(), additions: 1, deletions: 0
+        )
+
+        XCTAssertEqual(summary.endpoint, PREndpoint(owner: "acme", repo: "api", number: 7))
+    }
+}
