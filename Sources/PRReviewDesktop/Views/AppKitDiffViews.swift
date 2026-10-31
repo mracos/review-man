@@ -25,10 +25,12 @@ public enum AppKitDiffSpike {
 public struct AppKitDiffSurfaceView: NSViewRepresentable {
     @ObservedObject public var store: ReviewSessionStore
     public let file: DiffFile
+    public let fontSize: CGFloat
 
-    public init(store: ReviewSessionStore, file: DiffFile) {
+    public init(store: ReviewSessionStore, file: DiffFile, fontSize: CGFloat = 12) {
         self.store = store
         self.file = file
+        self.fontSize = fontSize
     }
 
     public func makeNSView(context: Context) -> AppKitDiffSurfaceContainer {
@@ -40,7 +42,11 @@ public struct AppKitDiffSurfaceView: NSViewRepresentable {
     }
 
     private var snapshot: AppKitDiffRenderSnapshot {
-        AppKitDiffRenderSnapshot(file: file, rows: store.review?.diffRows(for: file) ?? [])
+        AppKitDiffRenderSnapshot(
+            file: file,
+            rows: store.review?.diffRows(for: file) ?? [],
+            metrics: .forFontSize(fontSize)
+        )
     }
 }
 
@@ -157,23 +163,23 @@ private final class AppKitDiffTextCache {
         line: DiffLine,
         languageID: Int?,
         palette: AppKitDiffPalette,
+        font: NSFont,
         appearanceKey: String
     ) -> NSAttributedString {
-        if self.appearanceKey != appearanceKey {
-            self.appearanceKey = appearanceKey
+        let key = "\(appearanceKey)|\(font.pointSize)"
+        if self.appearanceKey != key {
+            self.appearanceKey = key
             values.removeAll(keepingCapacity: true)
         }
         if let value = values[rowID] { return value }
-        let value = AppKitDiffTextBuilder.build(line: line, languageID: languageID, palette: palette)
+        let value = AppKitDiffTextBuilder.build(line: line, languageID: languageID, palette: palette, font: font)
         values[rowID] = value
         return value
     }
 }
 
 private enum AppKitDiffTextBuilder {
-    private static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-
-    static func build(line: DiffLine, languageID: Int?, palette: AppKitDiffPalette) -> NSAttributedString {
+    static func build(line: DiffLine, languageID: Int?, palette: AppKitDiffPalette, font: NSFont) -> NSAttributedString {
         let baseColor: NSColor
         switch line.kind {
         case .added: baseColor = palette.addedForeground
@@ -205,11 +211,18 @@ private enum AppKitDiffTextBuilder {
     }
 }
 
-private enum AppKitDiffRowRenderer {
-    static let gutterCharacterWidth: CGFloat = AppKitDiffLayoutMetrics.default.characterWidth
-    static let gutterFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-    static let headerFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+/// The diff's fonts at one size, built once per draw pass.
+private struct AppKitDiffFonts {
+    let code: NSFont
+    let header: NSFont
 
+    init(size: CGFloat) {
+        code = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        header = NSFont.monospacedSystemFont(ofSize: size, weight: .medium)
+    }
+}
+
+private enum AppKitDiffRowRenderer {
     static func draw(
         row: DiffDisplayRow,
         file: DiffFile,
@@ -217,6 +230,8 @@ private enum AppKitDiffRowRenderer {
         cache: AppKitDiffTextCache,
         languageID: Int?,
         palette: AppKitDiffPalette,
+        fonts: AppKitDiffFonts,
+        characterWidth: CGFloat,
         appearanceKey: String,
         selected: Bool = false,
         hovered: Bool = false
@@ -229,7 +244,7 @@ private enum AppKitDiffRowRenderer {
             drawText(
                 file.hunks[hunkIndex].header,
                 in: rect.insetBy(dx: 8, dy: 3),
-                font: headerFont,
+                font: fonts.header,
                 color: palette.hunkHeaderForeground
             )
         case .line(let hunkIndex, let lineIndex):
@@ -248,13 +263,13 @@ private enum AppKitDiffRowRenderer {
                 rect.fill()
             }
 
-            let gutterWidth = CGFloat(file.gutterDigits * 2 + 3) * gutterCharacterWidth + 14
+            let gutterWidth = CGFloat(file.gutterDigits * 2 + 3) * characterWidth + 14
             palette.gutterBackground.withAlphaComponent(0.5).setFill()
             NSRect(x: rect.minX, y: rect.minY, width: gutterWidth, height: rect.height).fill()
             drawText(
                 DiffAttributedStringBuilder.gutterText(for: line, digits: file.gutterDigits),
                 in: NSRect(x: rect.minX + 6, y: rect.minY + 2, width: gutterWidth - 8, height: rect.height - 4),
-                font: gutterFont,
+                font: fonts.code,
                 color: palette.gutterForeground,
                 alignment: .right
             )
@@ -263,6 +278,7 @@ private enum AppKitDiffRowRenderer {
                 line: line,
                 languageID: languageID,
                 palette: palette,
+                font: fonts.code,
                 appearanceKey: appearanceKey
             )
             text.draw(
@@ -275,22 +291,22 @@ private enum AppKitDiffRowRenderer {
                 options: [.usesLineFragmentOrigin, .usesFontLeading]
             )
         case .thread(let threadID):
-            drawMarkerRow("Comment thread · \(threadID)", in: rect, color: palette.hunkHeaderForeground)
+            drawMarkerRow("Comment thread · \(threadID)", in: rect, color: palette.hunkHeaderForeground, font: fonts.header)
         case .draft(let draftID):
-            drawMarkerRow("Draft comment · \(draftID.uuidString.prefix(8))", in: rect, color: palette.hunkHeaderForeground)
+            drawMarkerRow("Draft comment · \(draftID.uuidString.prefix(8))", in: rect, color: palette.hunkHeaderForeground, font: fonts.header)
         case .outdatedHeader:
-            drawMarkerRow("Outdated comments", in: rect, color: palette.comment)
+            drawMarkerRow("Outdated comments", in: rect, color: palette.comment, font: fonts.header)
         case .orphanedHeader:
-            drawMarkerRow("Orphaned drafts", in: rect, color: palette.removedForeground)
+            drawMarkerRow("Orphaned drafts", in: rect, color: palette.removedForeground, font: fonts.header)
         case .empty:
-            drawMarkerRow("No changes", in: rect, color: palette.comment)
+            drawMarkerRow("No changes", in: rect, color: palette.comment, font: fonts.header)
         }
     }
 
-    private static func drawMarkerRow(_ text: String, in rect: NSRect, color: NSColor) {
+    private static func drawMarkerRow(_ text: String, in rect: NSRect, color: NSColor, font: NSFont) {
         NSColor.controlBackgroundColor.setFill()
         rect.fill()
-        drawText(text, in: rect.insetBy(dx: 8, dy: 3), font: headerFont, color: color)
+        drawText(text, in: rect.insetBy(dx: 8, dy: 3), font: font, color: color)
     }
 
     private static func drawText(
@@ -997,6 +1013,7 @@ private final class AppKitDiffSurfaceNSView: NSView {
 
         let visible = visibleRect.insetBy(dx: 0, dy: -snapshot.layout.metrics.lineHeight)
         let range = snapshot.layout.visibleRange(in: visible, overscan: 0)
+        let fonts = AppKitDiffFonts(size: snapshot.layout.metrics.fontSize)
         for index in range {
             let positioned = snapshot.layout.rows[index]
             guard hostedRows[positioned.id] == nil else { continue }
@@ -1009,6 +1026,8 @@ private final class AppKitDiffSurfaceNSView: NSView {
                 cache: textCache,
                 languageID: snapshot.languageID,
                 palette: palette,
+                fonts: fonts,
+                characterWidth: snapshot.layout.metrics.characterWidth,
                 appearanceKey: appearance.key,
                 selected: store?.selection.rowID == positioned.id,
                 hovered: hoveredRowID == positioned.id

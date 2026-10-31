@@ -55,8 +55,7 @@ public struct ReviewWindowView: View {
         .modifier(CommandRoutingModifier(
             store: store,
             showOpenSheet: $showOpenSheet,
-            sidebarVisible: $sidebarVisible,
-            canvasZoom: $canvasZoom
+            sidebarVisible: $sidebarVisible
         ))
         .modifier(DiffPresentationCommandRouting(
             store: store,
@@ -64,6 +63,7 @@ public struct ReviewWindowView: View {
             diffPresentation: $diffPresentation
         ))
         .modifier(ViewedNavigationCommandRouting(store: store))
+        .modifier(ZoomCommandRouting(store: store, showCanvas: $showCanvas, canvasZoom: $canvasZoom))
         .modifier(NavigationHistoryRouting(store: store, showCanvas: $showCanvas))
         .toolbar { toolbarContent }
         .onChange(of: store.requestFocus) { _ in
@@ -454,7 +454,6 @@ private struct CommandRoutingModifier: ViewModifier {
     @ObservedObject var store: ReviewSessionStore
     @Binding var showOpenSheet: Bool
     @Binding var sidebarVisible: Bool
-    @Binding var canvasZoom: CGFloat
 
     func body(content: Content) -> some View {
         content
@@ -509,18 +508,6 @@ private struct CommandRoutingModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .reviewToggleSidebarRequest)) { note in
                 guard matches(note) else { return }
                 sidebarVisible.toggle()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .reviewCanvasZoomInRequest)) { note in
-                guard matches(note) else { return }
-                canvasZoom = ChangeCanvasView.clampedZoom(canvasZoom + ChangeCanvasView.zoomStep)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .reviewCanvasZoomOutRequest)) { note in
-                guard matches(note) else { return }
-                canvasZoom = ChangeCanvasView.clampedZoom(canvasZoom - ChangeCanvasView.zoomStep)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .reviewCanvasResetZoomRequest)) { note in
-                guard matches(note) else { return }
-                canvasZoom = ChangeCanvasView.defaultZoom
             }
             .onReceive(NotificationCenter.default.publisher(for: .reviewPreviousFileRequest)) { note in
                 guard matches(note) else { return }
@@ -636,6 +623,48 @@ private struct NavigationHistoryRouting: ViewModifier {
         case .file(let path):
             store.select(filePath: path)
             showCanvas = false
+        }
+    }
+
+    private func matches(_ note: Notification) -> Bool {
+        guard let object = note.object as? ReviewSessionStore else { return true }
+        return object === store
+    }
+}
+
+/// Cmd-+ / Cmd-- / Cmd-0 zoom the canvas while it shows, and size the diff
+/// text while a file is open.
+private struct ZoomCommandRouting: ViewModifier {
+    @ObservedObject var store: ReviewSessionStore
+    @Binding var showCanvas: Bool
+    @Binding var canvasZoom: CGFloat
+    @AppStorage(DiffTextSize.key) private var diffFontSize = Double(DiffTextSize.defaultSize)
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .reviewCanvasZoomInRequest)) { note in
+                guard matches(note) else { return }
+                zoom(by: 1)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reviewCanvasZoomOutRequest)) { note in
+                guard matches(note) else { return }
+                zoom(by: -1)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reviewCanvasResetZoomRequest)) { note in
+                guard matches(note) else { return }
+                if showCanvas {
+                    canvasZoom = ChangeCanvasView.defaultZoom
+                } else {
+                    diffFontSize = Double(DiffTextSize.defaultSize)
+                }
+            }
+    }
+
+    private func zoom(by direction: CGFloat) {
+        if showCanvas {
+            canvasZoom = ChangeCanvasView.clampedZoom(canvasZoom + direction * ChangeCanvasView.zoomStep)
+        } else {
+            diffFontSize = Double(DiffTextSize.stepped(CGFloat(diffFontSize), by: direction))
         }
     }
 

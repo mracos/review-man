@@ -13,6 +13,22 @@ public struct AppKitDiffLayoutMetrics: Equatable {
     public let statusHeight: CGFloat
     public let characterWidth: CGFloat
     public let minimumContentWidth: CGFloat
+    /// Point size of the monospaced code font every other metric is sized for.
+    public let fontSize: CGFloat
+
+    /// Metrics for a code font size, scaling every row height and the
+    /// character width; 12 pt gives exactly the defaults.
+    public static func forFontSize(_ size: CGFloat) -> AppKitDiffLayoutMetrics {
+        let scale = size / 12
+        return AppKitDiffLayoutMetrics(
+            lineHeight: (18 * scale).rounded(),
+            hunkHeight: (24 * scale).rounded(),
+            commentHeight: (38 * scale).rounded(),
+            statusHeight: (24 * scale).rounded(),
+            characterWidth: 7.2 * scale,
+            fontSize: size
+        )
+    }
 
     public init(
         lineHeight: CGFloat = 18,
@@ -20,7 +36,8 @@ public struct AppKitDiffLayoutMetrics: Equatable {
         commentHeight: CGFloat = 38,
         statusHeight: CGFloat = 24,
         characterWidth: CGFloat = 7.2,
-        minimumContentWidth: CGFloat = 900
+        minimumContentWidth: CGFloat = 900,
+        fontSize: CGFloat = 12
     ) {
         self.lineHeight = lineHeight
         self.hunkHeight = hunkHeight
@@ -28,6 +45,7 @@ public struct AppKitDiffLayoutMetrics: Equatable {
         self.statusHeight = statusHeight
         self.characterWidth = characterWidth
         self.minimumContentWidth = minimumContentWidth
+        self.fontSize = fontSize
     }
 
     public func height(for row: Row) -> CGFloat {
