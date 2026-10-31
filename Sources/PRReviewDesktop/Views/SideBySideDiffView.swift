@@ -238,6 +238,7 @@ private struct SideBySideDiffPane: View {
 }
 
 private struct SideBySideDiffLineCell: View {
+    @Environment(\.diffFontSize) private var diffFontSize
     enum Side {
         case old
         case new
@@ -291,14 +292,14 @@ private struct SideBySideDiffLineCell: View {
         )
         HStack(spacing: 0) {
             Text(lineNumberText)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: diffFontSize, design: .monospaced))
                 .foregroundStyle(palette.gutterForeground)
                 .lineLimit(1)
-                .frame(width: 44, alignment: .trailing)
+                .frame(width: 44 * diffFontSize / DiffTextSize.defaultSize, alignment: .trailing)
                 .padding(.trailing, 8)
                 .background(palette.gutterBackground.opacity(0.5))
             Text(content)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: diffFontSize, design: .monospaced))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 8)

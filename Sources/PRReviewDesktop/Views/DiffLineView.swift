@@ -5,6 +5,7 @@ import PRReviewKit
 /// highlighted content. Tokenization is demand-driven per realized line and
 /// cached per (line, language, theme) in the store's `DiffLineCache`.
 public struct DiffLineView: View {
+    @Environment(\.diffFontSize) private var diffFontSize
     @ObservedObject public var store: ReviewSessionStore
     @ObservedObject private var hover: ReviewHoverModel
     public let file: DiffFile
@@ -41,7 +42,7 @@ public struct DiffLineView: View {
         // `digits * 2 + 3` value was treated as points while the string is
         // that many *characters*, so the monospace gutter wrapped vertically
         // and inflated every row to ~45px.
-        let gutterWidth = CGFloat(gutter.count) * 7.2
+        let gutterWidth = CGFloat(gutter.count) * diffFontSize * 0.6
 
         // Rendered line from the per-window cache: tokenization + attributed
         // string building happen once per line per theme, so switching files
@@ -56,14 +57,14 @@ public struct DiffLineView: View {
 
         return HStack(spacing: 0) {
             Text(gutter)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: diffFontSize, design: .monospaced))
                 .foregroundStyle(palette.gutterForeground)
                 .lineLimit(1)
                 .frame(width: gutterWidth, alignment: .trailing)
                 .padding(.leading, 6)
                 .background(palette.gutterBackground.opacity(0.5))
             Text(content)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: diffFontSize, design: .monospaced))
                 .lineLimit(1)
                 .padding(.horizontal, 8)
             Spacer(minLength: 0)
@@ -178,6 +179,7 @@ enum DiffLineSelection {
 
 /// A unified hunk header row.
 public struct HunkHeaderView: View {
+    @Environment(\.diffFontSize) private var diffFontSize
     public let hunk: DiffHunk
 
     public init(hunk: DiffHunk) {
@@ -186,7 +188,7 @@ public struct HunkHeaderView: View {
 
     public var body: some View {
         Text(hunk.header)
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .font(.system(size: diffFontSize, weight: .medium, design: .monospaced))
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)

@@ -25,6 +25,7 @@ public struct DiffView: View {
     /// Compact language identity for the whole file (cache key). Resolved once
     /// per body evaluation instead of once per line.
     private let languageID: Int?
+    @AppStorage(DiffTextSize.key) private var diffFontSize = Double(DiffTextSize.defaultSize)
 
     public init(store: ReviewSessionStore, file: DiffFile, presentation: Binding<DiffPresentation>) {
         self.store = store
@@ -33,8 +34,12 @@ public struct DiffView: View {
         self.languageID = Highlighter.languageID(for: file.path)
     }
 
-    @ViewBuilder
     public var body: some View {
+        content.environment(\.diffFontSize, CGFloat(diffFontSize))
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if file.isBinary {
             EmptyStateView(
                 icon: "doc.zipper",
@@ -65,7 +70,7 @@ public struct DiffView: View {
             case .disabled:
                 diffScroll
             case .surface:
-                AppKitDiffSurfaceView(store: store, file: file)
+                AppKitDiffSurfaceView(store: store, file: file, fontSize: CGFloat(diffFontSize))
                     .accessibilityIdentifier("diff-pane-appkit-surface")
                     .onAppear { diffDidAppear() }
                     .onDisappear { store.performance.diffDidDisappear(path: file.path) }
