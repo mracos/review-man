@@ -771,6 +771,40 @@ public extension ReviewSessionStore {
         selectAdjacentFile(1)
     }
 
+    func selectPreviousUnviewedFile() {
+        selectAdjacentUnviewedFile(-1)
+    }
+
+    func selectNextUnviewedFile() {
+        selectAdjacentUnviewedFile(1)
+    }
+
+    /// Marks the selected file viewed (never un-marks it) and moves to the
+    /// next unviewed file; stays put once every file is viewed.
+    func markViewedAndAdvance() {
+        guard let path = selection.filePath ?? review?.files.first?.path else { return }
+        if review?.viewed.contains(path) == false {
+            toggleViewed(filePath: path)
+        }
+        selectAdjacentUnviewedFile(1)
+    }
+
+    /// Walks the file list in `delta`'s direction, wrapping around, to the
+    /// first file that is neither viewed nor the current one.
+    private func selectAdjacentUnviewedFile(_ delta: Int) {
+        guard let review, !review.files.isEmpty else { return }
+        let count = review.files.count
+        let start = selection.filePath.flatMap { review.fileIndexByPath[$0] } ?? (delta > 0 ? -1 : count)
+        for step in 1...count {
+            let index = ((start + delta * step) % count + count) % count
+            let path = review.files[index].path
+            guard path != selection.filePath, !review.viewed.contains(path) else { continue }
+            select(filePath: path)
+            selection.rowID = nil
+            return
+        }
+    }
+
     private func selectAdjacentFile(_ delta: Int) {
         guard let review, !review.files.isEmpty else { return }
         let current = selection.filePath ?? review.files.first?.path
