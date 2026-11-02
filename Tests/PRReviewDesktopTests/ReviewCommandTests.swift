@@ -129,6 +129,73 @@ final class ReviewCommandTests: XCTestCase {
         }
     }
 
+    // MARK: - Stacked list
+
+    @MainActor
+    func testListCollapsesViewedFilesByDefaultAndHonorsToggles() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        let files = store.review?.files ?? []
+        store.toggleViewed(filePath: files[1].path)
+
+        XCTAssertFalse(store.isCollapsedInList(files[0]))
+        XCTAssertTrue(store.isCollapsedInList(files[1]), "viewed files start collapsed, like GitHub")
+
+        store.toggleCollapsedInList(files[0])
+        store.toggleCollapsedInList(files[1])
+
+        XCTAssertTrue(store.isCollapsedInList(files[0]))
+        XCTAssertFalse(store.isCollapsedInList(files[1]))
+    }
+
+    @MainActor
+    func testListCollapsesFilesTooLargeToRenderEagerly() {
+        var big = DiffFile()
+        big.newPath = "Big.swift"
+        big.hunks = [DiffHunk(
+            oldStart: 1, oldCount: 0, newStart: 1, newCount: 500, context: "",
+            lines: (1...500).map { DiffLine(kind: .added, content: "x", oldLine: nil, newLine: $0) }
+        )]
+        var binary = DiffFile()
+        binary.newPath = "image.png"
+        binary.isBinary = true
+
+        XCTAssertTrue(StackedDiffsLayout.isCollapsedByDefault(big, isViewed: false))
+        XCTAssertTrue(StackedDiffsLayout.isCollapsedByDefault(binary, isViewed: false))
+    }
+
+    @MainActor
+    func testClickingALineInAnotherFileSelectsThatFile() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        let files = store.review?.files ?? []
+        store.select(filePath: files[0].path)
+
+        DiffLineSelection.handleTap(store: store, file: files[2], hunkIndex: 0, lineIndex: 1)
+
+        XCTAssertEqual(store.selection.filePath, files[2].path)
+        guard case .line(let path, _, _, _, _)? = store.selection.rowID else {
+            return XCTFail("expected a line selection, got \(String(describing: store.selection.rowID))")
+        }
+        XCTAssertEqual(path, files[2].path)
+    }
+
+    private var threeFileDiff: String {
+        sampleDiff + """
+
+        diff --git a/README.md b/README.md
+        --- a/README.md
+        +++ b/README.md
+        @@ -1,1 +1,2 @@
+         # Title
+        +New line
+        diff --git a/NOTES.md b/NOTES.md
+        --- a/NOTES.md
+        +++ b/NOTES.md
+        @@ -1,1 +1,2 @@
+         # Notes
+        +Another line
+        """
+    }
+
     // MARK: - Escape precedence
 
     @MainActor

@@ -41,7 +41,8 @@ public struct DiffLineView: View {
         // `digits * 2 + 3` value was treated as points while the string is
         // that many *characters*, so the monospace gutter wrapped vertically
         // and inflated every row to ~45px.
-        let gutterWidth = CGFloat(gutter.count) * 7.2
+        let characterWidth = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular).maximumAdvancement.width
+        let gutterWidth = (CGFloat(gutter.count) * characterWidth).rounded(.up) + 2
 
         // Rendered line from the per-window cache: tokenization + attributed
         // string building happen once per line per theme, so switching files
@@ -145,6 +146,11 @@ public struct DiffLineView: View {
 enum DiffLineSelection {
     static func handleTap(store: ReviewSessionStore, file: DiffFile, hunkIndex: Int, lineIndex: Int) {
         guard let diffLine = file.line(at: hunkIndex, lineIndex) else { return }
+        // The stacked list shows every file, so a click can land outside the
+        // selected one; commands act on the selected file, so follow the click.
+        if store.selection.filePath != file.path {
+            store.select(filePath: file.path)
+        }
         let isShift = NSEvent.modifierFlags.contains(.shift)
         if isShift, let startRow = store.selection.rowID {
             let end = (file, hunkIndex, lineIndex)

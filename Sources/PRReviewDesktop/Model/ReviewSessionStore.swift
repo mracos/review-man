@@ -90,6 +90,9 @@ public final class ReviewSessionStore: ObservableObject {
     var hunkIDsCache: [String: [DiffRowID]] = [:]
     /// Head-file lines fetched for context expansion, keyed `sha:path`.
     var fileLinesCache: [String: [String]] = [:]
+    /// Files the reviewer opened or closed in the stacked list, overriding
+    /// `StackedDiffsLayout.isCollapsedByDefault`; cleared per pull request.
+    @Published var listCollapseOverrides: [String: Bool] = [:]
     var linePositionCache: [String: [DiffRowID: (hunk: Int, lineIndex: Int)]] = [:]
     /// Debounced persistence tasks (see `ReviewSessionStoreWorkflows`): rapid
     /// mutations cancel the pending write and schedule a fresh one, so only
@@ -155,6 +158,7 @@ public final class ReviewSessionStore: ObservableObject {
         let generation = loadGeneration
         loadTask?.cancel()
 
+        listCollapseOverrides = [:]
         // A new review invalidates everything derived from the previous one:
         // rendered lines, navigation indexes, and per-file lookups. The old
         // cache contents would only pin memory for lines that can never be

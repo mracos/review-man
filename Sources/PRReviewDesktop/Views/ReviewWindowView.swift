@@ -15,6 +15,9 @@ public struct ReviewWindowView: View {
     /// The change canvas is the default overview mode. Selecting a file card
     /// or a file in the sidebar switches back to the focused-file view.
     @State private var showCanvas = true
+    /// Which overview `showCanvas` reveals: the spatial canvas or every diff
+    /// stacked in one scroll.
+    @AppStorage(OverviewMode.key) private var overviewModeRaw = OverviewMode.canvas.rawValue
     @State private var canvasZoom = ChangeCanvasView.defaultZoom
     @State private var diffPresentation: DiffPresentation = .unified
     @State private var showCloseWarning = false
@@ -127,6 +130,32 @@ public struct ReviewWindowView: View {
         return object === store
     }
 
+    private var overviewMode: OverviewMode {
+        OverviewMode(rawValue: overviewModeRaw) ?? .canvas
+    }
+
+    private var canvasVisible: Bool {
+        showCanvas && overviewMode == .canvas
+    }
+
+    private var paneBinding: Binding<PaneChoice> {
+        Binding(
+            get: { showCanvas ? (overviewMode == .list ? .list : .canvas) : .file },
+            set: { choice in
+                switch choice {
+                case .canvas:
+                    overviewModeRaw = OverviewMode.canvas.rawValue
+                    showCanvas = true
+                case .list:
+                    overviewModeRaw = OverviewMode.list.rawValue
+                    showCanvas = true
+                case .file:
+                    showCanvas = false
+                }
+            }
+        )
+    }
+
     private var submitSheetBinding: Binding<Bool> {
         Binding(
             get: { store.submitState != .hidden },
@@ -139,12 +168,13 @@ public struct ReviewWindowView: View {
         ToolbarItemGroup {
             if store.state == .loaded || store.state == .empty {
                 let availability = ReviewCommandAvailability(context: store.commandContext())
-                Picker("Diff view", selection: $showCanvas) {
-                    Text("Canvas").tag(true)
-                    Text("Selected file").tag(false)
+                Picker("Diff view", selection: paneBinding) {
+                    Text("Canvas").tag(PaneChoice.canvas)
+                    Text("List").tag(PaneChoice.list)
+                    Text("Selected file").tag(PaneChoice.file)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 170)
+                .frame(width: 230)
                 .accessibilityLabel("Diff view")
                 .accessibilityIdentifier("diff-view-picker")
 
@@ -362,10 +392,10 @@ public struct ReviewWindowView: View {
                                 showCanvas: $showCanvas,
                                 zoom: $canvasZoom
                             )
-                            .opacity(showCanvas ? 1 : 0)
-                            .allowsHitTesting(showCanvas)
-                            .disabled(!showCanvas)
-                            .accessibilityHidden(!showCanvas)
+                            .opacity(canvasVisible ? 1 : 0)
+                            .allowsHitTesting(canvasVisible)
+                            .disabled(!canvasVisible)
+                            .accessibilityHidden(!canvasVisible)
                         } else {
                             ChangeCanvasView(
                                 store: store,
@@ -373,10 +403,14 @@ public struct ReviewWindowView: View {
                                 showCanvas: $showCanvas,
                                 zoom: $canvasZoom
                             )
-                            .opacity(showCanvas ? 1 : 0)
-                            .allowsHitTesting(showCanvas)
-                            .disabled(!showCanvas)
-                            .accessibilityHidden(!showCanvas)
+                            .opacity(canvasVisible ? 1 : 0)
+                            .allowsHitTesting(canvasVisible)
+                            .disabled(!canvasVisible)
+                            .accessibilityHidden(!canvasVisible)
+                        }
+
+                        if showCanvas, overviewMode == .list {
+                            StackedDiffsView(store: store, files: review.files, showCanvas: $showCanvas)
                         }
 
                         if !showCanvas, let file = store.selectedFile {
@@ -564,4 +598,11 @@ private struct DiffPresentationCommandRouting: ViewModifier {
         guard let object = note.object as? ReviewSessionStore else { return true }
         return object === store
     }
+}
+
+/// The toolbar's three panes: the two overviews and the focused file.
+private enum PaneChoice: Hashable {
+    case canvas
+    case list
+    case file
 }
