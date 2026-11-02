@@ -385,6 +385,24 @@ public extension ReviewSessionStore {
         persistViewed()
     }
 
+    // MARK: - Stacked list
+
+    func isCollapsedInList(_ file: DiffFile) -> Bool {
+        listCollapseOverrides[file.path]
+            ?? StackedDiffsLayout.isCollapsedByDefault(file, isViewed: review?.viewed.contains(file.path) ?? false)
+    }
+
+    func toggleCollapsedInList(_ file: DiffFile) {
+        listCollapseOverrides[file.path] = !isCollapsedInList(file)
+    }
+
+    /// Marks a file viewed or not from the list; a file just marked viewed
+    /// folds away, like GitHub's "Viewed" checkbox.
+    func toggleViewedInList(_ file: DiffFile) {
+        toggleViewed(filePath: file.path)
+        listCollapseOverrides[file.path] = nil
+    }
+
     // MARK: - Context expansion
 
     /// Lines revealed per click; `all` reveals the whole gap.

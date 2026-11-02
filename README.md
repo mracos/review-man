@@ -19,6 +19,7 @@ separate windows and no duplicates for the same repository + PR.
 
 - **Read the diff** with SF Mono, fixed line-number gutters, horizontal
   scrolling, syntax coloring, and word-level change highlighting.
+- **List overview**: next to the canvas, the toolbar's List shows every file's diff stacked in one scroll, like GitHub's "Files changed": each file has a pinned header with its Viewed checkbox and folds away (viewed, binary and very long files start folded). Comments, threads and hidden-line expansion work there too.
 - **Expand hidden lines**: each hunk header shows how many unchanged lines sit above it; click it to reveal 20 more (Option-click, or "Show all", for the whole gap). Lines come from the file at the PR's head commit, fetched once per file.
 - **Change canvas**: see every changed file as a spatial card with a complete,
   readable patch, status, change density, comment counts, and viewed marks;
