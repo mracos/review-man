@@ -548,11 +548,15 @@ private final class GatedSubmitService: GitHubServing {
 
 /// Blocks each resolveThread call; lets the test release them per-call, with
 /// optional errors, so stale-completion protection is exercised deterministically.
-private final class GatedResolveService: GitHubServing {
+/// Its resolve calls park on background tasks while the test releases them
+/// from the main thread, so the gates are guarded by a lock.
+private final class GatedResolveService: GitHubServing, @unchecked Sendable {
     var bundle: FetchBundle?
-    private(set) var resolveCalls = 0
+    private let lock = NSLock()
+    private var calls = 0
     private var gates: [CheckedContinuation<Void, Error>] = []
-    var pendingCount: Int { gates.count }
+    var resolveCalls: Int { lock.withLock { calls } }
+    var pendingCount: Int { lock.withLock { gates.count } }
 
     func ensureAvailable() async throws {}
     func resolveEndpoint(from argument: String) async throws -> PREndpoint {
@@ -562,17 +566,21 @@ private final class GatedResolveService: GitHubServing {
         bundle ?? FetchBundle(pr: makePRInfo(), files: DiffParser.parse(sampleDiff), threads: [])
     }
     func resolveThread(_ ep: PREndpoint, threadID: String, resolved: Bool) async throws {
-        resolveCalls += 1
+        lock.withLock { calls += 1 }
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            gates.append(cont)
+            lock.withLock { gates.append(cont) }
         }
     }
     func releaseFirst(withError error: Error) {
-        guard !gates.isEmpty else { return }
-        gates.removeFirst().resume(throwing: error)
+        let gate: CheckedContinuation<Void, Error>? = lock.withLock { gates.isEmpty ? nil : gates.removeFirst() }
+        gate?.resume(throwing: error)
     }
     func releaseAll() {
-        while !gates.isEmpty { gates.removeFirst().resume() }
+        let released: [CheckedContinuation<Void, Error>] = lock.withLock {
+            defer { gates.removeAll() }
+            return gates
+        }
+        released.forEach { $0.resume() }
     }
     func submitReview(_ ep: PREndpoint, commitID: String, body: String, event: String, drafts: [DraftComment]) async throws {}
     func replyToThread(_ ep: PREndpoint, commentID: Int, body: String) async throws {}
