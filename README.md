@@ -176,7 +176,7 @@ open "build/PR Review.app" --args --demo --demo-files 500 --demo-lines 60000
   and restored when you reopen the same head.
 - **Replies are sent immediately** (GitHub's reply API has no pending-review
   batching). Only top-level comments are submitted as one review.
-- **Viewed marks are local only** (per head SHA); they are not pushed to GitHub.
+- **Viewed marks are local by default** (per head SHA). Settings > GitHub > "Sync viewed files with GitHub" mirrors them to GitHub's own viewed state: files viewed on github.com load as viewed, and marking a file here marks it there.
 - **LEFT-side comments** use old-file line numbers; **RIGHT-side** use new-file
   line numbers, exactly as the GitHub API requires.
 - **Orphaned drafts**: when a head changes and a draft's line disappears, the
