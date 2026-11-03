@@ -299,7 +299,7 @@ private struct SidebarFileItemRow: View {
                     .accessibilityLabel("viewed")
             }
             if let additions = item.additions, let deletions = item.deletions {
-                Text("+\(additions) −\(deletions)")
+                Text(verbatim: "+\(additions) −\(deletions)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()

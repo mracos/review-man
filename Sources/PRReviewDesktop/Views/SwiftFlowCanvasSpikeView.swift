@@ -189,7 +189,7 @@ struct SwiftFlowCanvasSpikeView: View {
                     .foregroundStyle(.secondary)
                 Text(data.name).lineLimit(1)
                 if let file {
-                    Text("+\(file.additions) −\(file.deletions)")
+                    Text(verbatim: "+\(file.additions) −\(file.deletions)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

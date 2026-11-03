@@ -14,7 +14,7 @@ public struct PullRequestHeaderView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 if let pr = review.pr {
-                    Text("#\(pr.number)")
+                    Text(verbatim: "#\(pr.number)")
                         .font(.headline)
                         .foregroundStyle(.secondary)
                     Text(pr.title)
@@ -33,7 +33,7 @@ public struct PullRequestHeaderView: View {
                             .foregroundStyle(.orange)
                     }
                     Spacer()
-                    Text("+\(pr.additions)  −\(pr.deletions)  · \(pr.changedFiles) files")
+                    Text(verbatim: "+\(pr.additions)  −\(pr.deletions)  · \(pr.changedFiles) files")
                         .foregroundStyle(.secondary)
                 }
             }
