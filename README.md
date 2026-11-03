@@ -43,6 +43,8 @@ separate windows and no duplicates for the same repository + PR.
   letters, ± counts, comment badges, and locally-persisted viewed marks.
   Press Cmd-F to focus the filter, Cmd-Option-Left to collapse folders, or
   Cmd-Option-Right to expand them.
+- **Focused file bar**: the open file's path, a Viewed checkbox and "Viewed & Next". Shift-Option-Cmd-V marks the file viewed and opens the next unviewed one; Ctrl-Option-Cmd-Down/Up jump between unviewed files; Cmd-[ and Cmd-] go back and forward between the canvas and the files you visited.
+- **PR header** with state, review decision, CI checks (passed, failed, pending) and the description, shown as plain text.
 - **`gh` onboarding**: the app discovers `gh` from your PATH, Apple Silicon
   Homebrew, or MacPorts (or a user-selected executable) and shows actionable
   status for missing, unauthenticated, expired, or under-scoped
