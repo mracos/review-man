@@ -149,6 +149,32 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(groups.map { $0.rows.map(\.number) }, [[1, 3], [2]])
     }
 
+    func testRepositoriesCanBeToggledFromTheListOfKnownOnes() async {
+        let service = InboxService()
+        service.rowsByQuery = ["review-requested:@me": [row(1, "acme/web"), row(2, "acme/api")]]
+        let inbox = makeStore(service)
+        await inbox.refresh()
+
+        inbox.toggleRepository("acme/web")
+
+        XCTAssertTrue(inbox.isHidden("acme/web"))
+        XCTAssertEqual(inbox.knownRepositories, ["acme/api", "acme/web"], "a hidden repository stays listed so it can come back")
+        inbox.toggleRepository("acme/web")
+        XCTAssertFalse(inbox.isHidden("acme/web"))
+    }
+
+    func testCollapsedRepositoriesSurviveANewStore() {
+        let inbox = makeStore(InboxService())
+        inbox.toggleRepositoryCollapsed("acme/web")
+        inbox.toggleRepositoryCollapsed("acme/api")
+        inbox.toggleRepositoryCollapsed("acme/api")
+
+        let reopened = makeStore(InboxService())
+
+        XCTAssertTrue(reopened.isRepositoryCollapsed("acme/web"))
+        XCTAssertFalse(reopened.isRepositoryCollapsed("acme/api"))
+    }
+
     func testCollapsedSectionsSurviveANewStore() {
         let inbox = makeStore(InboxService())
         inbox.toggleCollapsed(.mine)

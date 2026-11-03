@@ -17,6 +17,7 @@ public final class InboxStore: ObservableObject {
         static let teamOrganizations = "PRReview.inbox.teamOrganizations"
         static let groupByRepository = "PRReview.inbox.groupByRepository"
         static let collapsed = "PRReview.inbox.collapsedSections"
+        static let collapsedRepositories = "PRReview.inbox.collapsedRepositories"
     }
 
     private struct SectionState {
@@ -34,6 +35,7 @@ public final class InboxStore: ObservableObject {
     @Published public private(set) var lastRefreshed: Date?
     @Published private var states: [InboxSection: SectionState] = [:]
     @Published private var collapsed: Set<String>
+    @Published private var collapsedRepositories: Set<String>
 
     private let service: GitHubServing
     private let defaults: UserDefaults
@@ -55,6 +57,7 @@ public final class InboxStore: ObservableObject {
         )
         groupByRepository = defaults.object(forKey: Key.groupByRepository) as? Bool ?? true
         collapsed = Set(defaults.stringArray(forKey: Key.collapsed) ?? [])
+        collapsedRepositories = Set(defaults.stringArray(forKey: Key.collapsedRepositories) ?? [])
     }
 
     deinit {
@@ -98,6 +101,24 @@ public final class InboxStore: ObservableObject {
         return names.sorted()
     }
 
+    /// Repositories on the loaded pull requests plus the hidden ones, so a
+    /// hidden repository can be switched back on.
+    public var knownRepositories: [String] {
+        var names = Set(filter.hiddenRepositories)
+        for state in states.values {
+            names.formUnion(state.rows.map(\.repository))
+        }
+        return names.sorted()
+    }
+
+    public func isHidden(_ repository: String) -> Bool {
+        filter.hiddenRepositories.contains(repository)
+    }
+
+    public func isRepositoryCollapsed(_ repository: String) -> Bool {
+        collapsedRepositories.contains(repository)
+    }
+
     public func isCollapsed(_ section: InboxSection) -> Bool {
         collapsed.contains(section.rawValue)
     }
@@ -134,6 +155,21 @@ public final class InboxStore: ObservableObject {
 
     public func showRepository(_ repository: String) {
         updateFilter { $0.hiddenRepositories.removeAll { $0 == repository } }
+    }
+
+    public func toggleRepository(_ repository: String) {
+        if isHidden(repository) {
+            showRepository(repository)
+        } else {
+            hideRepository(repository)
+        }
+    }
+
+    public func toggleRepositoryCollapsed(_ repository: String) {
+        if collapsedRepositories.remove(repository) == nil {
+            collapsedRepositories.insert(repository)
+        }
+        defaults.set(collapsedRepositories.sorted(), forKey: Key.collapsedRepositories)
     }
 
     public func toggleTeamOrganization(_ organization: String) {
