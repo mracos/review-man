@@ -59,16 +59,12 @@ struct InboxSidebarView: View {
         }
         if inbox.groupByRepository {
             ForEach(inbox.groupedRows(for: section), id: \.repository) { group in
-                Label(group.repository, systemImage: "folder")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .contextMenu { hideRepositoryButton(group.repository) }
-                    .accessibilityIdentifier("inbox-repo-\(section.id)-\(group.repository)")
-                ForEach(group.rows) { row in
-                    rowView(row, showsRepository: false)
-                        .padding(.leading, 12)
+                repositoryHeader(group.repository, count: group.rows.count, section: section)
+                if !inbox.isRepositoryCollapsed(group.repository) {
+                    ForEach(group.rows) { row in
+                        rowView(row, showsRepository: false)
+                            .padding(.leading, 12)
+                    }
                 }
             }
         } else {
@@ -85,6 +81,34 @@ struct InboxSidebarView: View {
             .contextMenu { hideRepositoryButton(row.repository) }
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("inbox-row-\(row.repository)#\(row.number)")
+    }
+
+    private func repositoryHeader(_ repository: String, count: Int, section: InboxSection) -> some View {
+        let collapsed = inbox.isRepositoryCollapsed(repository)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { inbox.toggleRepositoryCollapsed(repository) }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .rotationEffect(.degrees(collapsed ? 0 : 90))
+                Image(systemName: "folder")
+                Text(repository)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                Spacer(minLength: 4)
+                if collapsed {
+                    Text("\(count)")
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(collapsed ? "Show \(repository)'s pull requests" : "Fold \(repository)")
+        .contextMenu { hideRepositoryButton(repository) }
+        .accessibilityIdentifier("inbox-repo-\(section.id)-\(repository)")
     }
 
     private func sectionHeader(_ section: InboxSection) -> some View {
@@ -159,12 +183,15 @@ struct InboxSidebarView: View {
                 Button("Clear Label Filter") { inbox.clearLabels() }
                     .disabled(inbox.filter.labels.isEmpty)
             }
-            Menu("Hidden Repositories") {
-                if inbox.filter.hiddenRepositories.isEmpty {
-                    Text("None")
+            Menu("Repositories") {
+                if inbox.knownRepositories.isEmpty {
+                    Text("No repositories yet")
                 }
-                ForEach(inbox.filter.hiddenRepositories, id: \.self) { repository in
-                    Button("Show \(repository)") { inbox.showRepository(repository) }
+                ForEach(inbox.knownRepositories, id: \.self) { repository in
+                    Toggle(repository, isOn: Binding(
+                        get: { !inbox.isHidden(repository) },
+                        set: { _ in inbox.toggleRepository(repository) }
+                    ))
                 }
             }
             Divider()
