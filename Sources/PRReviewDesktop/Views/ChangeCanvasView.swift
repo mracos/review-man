@@ -1735,7 +1735,7 @@ private struct TreeFileChip: View {
 
             Spacer(minLength: 4 * zoom)
 
-            Text("+\(file.additions) −\(file.deletions)")
+            Text(verbatim: "+\(file.additions) −\(file.deletions)")
                 .font(.system(size: 10 * zoom, design: .monospaced))
                 .foregroundStyle(.secondary)
 
