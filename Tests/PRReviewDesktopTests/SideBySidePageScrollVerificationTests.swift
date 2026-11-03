@@ -30,16 +30,23 @@ final class SideBySidePageScrollVerificationTests: XCTestCase {
         pump(seconds: 2)
         guard store.review != nil else { return XCTFail("no review loaded") }
 
+        // Never shown: the keyboard monitor only checks that an event belongs
+        // to the hosting window, so the window needs to exist and lay out,
+        // not to be on screen, key, or give the test runner a Dock icon.
         let window = NSWindow(
-            contentRect: NSRect(x: 100, y: 100, width: 1000, height: 600),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 600),
+            styleMask: [.borderless],
             backing: .buffered, defer: false
         )
+        // Owned by this test under ARC; the AppKit default would release it a
+        // second time when it goes away.
+        window.isReleasedWhenClosed = false
         let hosting = NSHostingView(rootView: SideBySideDiffView(store: store, file: file))
         window.contentView = hosting
-        NSApp.setActivationPolicy(.regular)
-        window.makeKeyAndOrderFront(nil)
-        pump(seconds: 3)
+        // Creates the shared application (NSApp) for event dispatch without
+        // changing its activation policy.
+        _ = NSApplication.shared
+        layOut(window, seconds: 3)
 
         let scrollViews = findScrollViews(in: hosting)
         XCTAssertEqual(scrollViews.count, 2, "expected two side-by-side panes")
@@ -120,6 +127,17 @@ final class SideBySidePageScrollVerificationTests: XCTestCase {
             // Route through the application so app-level local event
             // monitors (as installed by SideBySideKeyboardMonitor) fire.
             NSApp.sendEvent(e)
+        }
+    }
+
+    /// Lays the off-screen window out while pumping the run loop, standing in
+    /// for the display cycle an on-screen window would get.
+    private func layOut(_ window: NSWindow, seconds: Double) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            window.contentView?.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         }
     }
 
