@@ -50,6 +50,10 @@ public final class ReviewSessionStore: ObservableObject {
     @Published public var submitEvent: ReviewEvent = .comment
     @Published public var submitBody = ""
     @Published public var submitValidationMessage: String?
+    /// What the viewer may do to the loaded pull request; nil until fetched,
+    /// in demo mode, or when the permission query failed.
+    @Published public var actionState: PRActionState?
+    @Published public var runningAction: PRAction?
 
     /// The single hovered diff row, observed ONLY by diff-row views. Keeping
     /// hover outside the store's own @Published surface stops constant mouse
@@ -74,6 +78,8 @@ public final class ReviewSessionStore: ObservableObject {
     var refreshTask: Task<Void, Never>?
     var refreshGeneration = 0
     var submitTask: Task<Void, Never>?
+    var actionStateTask: Task<Void, Never>?
+    var actionTask: Task<Void, Never>?
     var undoStack: [DraftMutation] = []
     var redoStack: [DraftMutation] = []
     /// Test diagnostics: how many resolve completions (success or failure) the
@@ -124,6 +130,8 @@ public final class ReviewSessionStore: ObservableObject {
         loadTask?.cancel()
         refreshTask?.cancel()
         submitTask?.cancel()
+        actionStateTask?.cancel()
+        actionTask?.cancel()
         pendingDraftSave?.cancel()
         pendingViewedSave?.cancel()
         pendingHiddenReviewersSave?.cancel()
@@ -174,6 +182,7 @@ public final class ReviewSessionStore: ObservableObject {
         state = .loading(reference: label)
         isBusy = true
         banner = nil
+        actionState = nil
 
         let loader = ReviewSessionLoader(service: service, persistence: persistence)
         loadTask = Task { [weak self] in
@@ -203,6 +212,7 @@ public final class ReviewSessionStore: ObservableObject {
                 self.state = presentation.files.isEmpty ? .empty : .loaded
                 self.isBusy = false
                 self.pullViewedFromGitHub()
+                self.loadActionState()
                 AppLog.info("store", "Load generation=\(generation) succeeded; files=\(presentation.files.count); state=\(presentation.files.isEmpty ? "empty" : "loaded")")
             } catch is CancellationError {
                 AppLog.warning("store", "Load generation=\(generation) cancelled")

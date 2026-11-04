@@ -38,6 +38,10 @@ public protocol GitHubServing {
     func fetchViewerScope() async throws -> InboxScope
     /// A file's lines at a commit, for revealing context between hunks.
     func fetchFileLines(_ endpoint: PREndpoint, path: String, ref: String) async throws -> [String]
+    /// What the viewer may do to the pull request (merge, approve, close...).
+    func fetchActionState(_ endpoint: PREndpoint) async throws -> PRActionState?
+    /// Runs a pull request action such as merging or approving.
+    func perform(_ action: PRAction, on endpoint: PREndpoint) async throws
 }
 
 public extension GitHubServing {
@@ -63,5 +67,12 @@ public extension GitHubServing {
     /// not implement it. `GitHubClient` overrides it.
     func fetchFileLines(_ endpoint: PREndpoint, path: String, ref: String) async throws -> [String] {
         throw GitHubError.parse("File contents are not available")
+    }
+
+    /// Default: no actions, so read-only test doubles show no controls.
+    func fetchActionState(_ endpoint: PREndpoint) async throws -> PRActionState? { nil }
+
+    func perform(_ action: PRAction, on endpoint: PREndpoint) async throws {
+        throw GitHubError.api("Pull request actions are not supported here")
     }
 }
