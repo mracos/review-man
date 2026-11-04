@@ -16,6 +16,7 @@ public enum OverviewMode: String {
 struct StackedDiffsView: View {
     @ObservedObject var store: ReviewSessionStore
     let files: [DiffFile]
+    let presentation: DiffPresentation
     @Binding var showCanvas: Bool
 
     var body: some View {
@@ -50,17 +51,62 @@ struct StackedDiffsView: View {
                 .padding(.vertical, 8)
         } else {
             let languageID = Highlighter.languageID(for: file.path)
+            let displayRows = store.review?.diffRows(for: file) ?? []
             ScrollView(.horizontal) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(store.review?.diffRows(for: file) ?? []) { row in
-                        DiffRowView(store: store, file: file, displayRow: row, languageID: languageID)
-                            .frame(minWidth: width, alignment: .leading)
-                            .id(row.id)
+                if presentation == .sideBySide {
+                    sideBySideRows(file, displayRows: displayRows, languageID: languageID, width: width)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(displayRows) { row in
+                            DiffRowView(store: store, file: file, displayRow: row, languageID: languageID)
+                                .frame(minWidth: width, alignment: .leading)
+                                .id(row.id)
+                        }
                     }
                 }
             }
         }
         Divider()
+    }
+
+    /// Before and After next to each other, one half each, with the hunk
+    /// headers and comment threads spanning both.
+    private func sideBySideRows(_ file: DiffFile, displayRows: [DiffDisplayRow], languageID: Int?, width: CGFloat) -> some View {
+        let column = max(SideBySideDiffLayout.minimumColumnWidth(for: file), ((width - 1) / 2).rounded(.down))
+        return LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(SideBySideDiffLayout.rows(file: file, displayRows: displayRows)) { row in
+                switch row {
+                case .hunk(let hunkIndex):
+                    HunkHeaderView(hunk: file.hunks[hunkIndex], hiddenAbove: file.hiddenLinesAbove(hunk: hunkIndex)) { all in
+                        store.expandContext(path: file.path, aboveHunk: hunkIndex, all: all)
+                    }
+                    .frame(width: column * 2 + 1, alignment: .leading)
+                case .lines(let hunkIndex, let oldLineIndex, let newLineIndex):
+                    HStack(spacing: 0) {
+                        sideCell(file, hunkIndex: hunkIndex, lineIndex: oldLineIndex, side: .old, languageID: languageID, width: column)
+                        Divider().frame(height: 18)
+                        sideCell(file, hunkIndex: hunkIndex, lineIndex: newLineIndex, side: .new, languageID: languageID, width: column)
+                    }
+                case .supplementary(let displayRow):
+                    DiffRowView(store: store, file: file, displayRow: displayRow, languageID: languageID)
+                        .frame(width: column * 2 + 1, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sideCell(_ file: DiffFile, hunkIndex: Int, lineIndex: Int?, side: SideBySideDiffLineCell.Side, languageID: Int?, width: CGFloat) -> some View {
+        if let lineIndex, let line = file.line(at: hunkIndex, lineIndex) {
+            SideBySideDiffLineCell(
+                store: store, file: file, line: line, hunkIndex: hunkIndex,
+                lineIndex: lineIndex, languageID: languageID, side: side
+            )
+            .frame(width: width, height: 18, alignment: .leading)
+            .clipped()
+        } else {
+            Color.clear.frame(width: width, height: 18)
+        }
     }
 }
 

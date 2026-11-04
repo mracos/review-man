@@ -178,7 +178,7 @@ public struct ReviewWindowView: View {
                 .accessibilityLabel("Diff view")
                 .accessibilityIdentifier("diff-view-picker")
 
-                if !showCanvas {
+                if !showCanvas || overviewMode == .list {
                     Picker("Diff layout", selection: $diffPresentation) {
                         ForEach(DiffPresentation.allCases) { presentation in
                             Text(presentation.title).tag(presentation)
@@ -410,7 +410,7 @@ public struct ReviewWindowView: View {
                         }
 
                         if showCanvas, overviewMode == .list {
-                            StackedDiffsView(store: store, files: review.files, showCanvas: $showCanvas)
+                            StackedDiffsView(store: store, files: review.files, presentation: diffPresentation, showCanvas: $showCanvas)
                         }
 
                         if !showCanvas, let file = store.selectedFile {

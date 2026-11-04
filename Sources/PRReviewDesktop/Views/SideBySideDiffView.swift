@@ -239,7 +239,7 @@ private struct SideBySideDiffPane: View {
     }
 }
 
-private struct SideBySideDiffLineCell: View {
+struct SideBySideDiffLineCell: View {
     enum Side {
         case old
         case new
