@@ -172,6 +172,19 @@ final class ReviewCommandTests: XCTestCase {
     // MARK: - Helpers
 
     @MainActor
+    func testBulkViewedMarksOnlyWhatChanges() {
+        let store = makeLoadedStore()
+        store.toggleViewed(filePath: "Src.swift")
+
+        XCTAssertEqual(store.setViewed(.fileExtension("swift"), viewed: true), 0)
+        XCTAssertEqual(store.banner?.text, "Already viewed.")
+
+        XCTAssertEqual(store.setViewed(.all, viewed: false), 1)
+        XCTAssertEqual(store.review?.viewed, [])
+        XCTAssertEqual(store.banner?.text, "Marked 1 file unviewed.")
+    }
+
+    @MainActor
     private func makeLoadedStore(diff: String? = nil) -> ReviewSessionStore {
         let service = FakeService()
         service.bundle = FetchBundle(

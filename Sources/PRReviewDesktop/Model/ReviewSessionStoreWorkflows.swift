@@ -385,6 +385,28 @@ public extension ReviewSessionStore {
         persistViewed()
     }
 
+    func viewedChangeCount(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
+        guard let review else { return 0 }
+        return scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }.count
+    }
+
+    @discardableResult
+    func setViewed(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
+        guard let review else { return 0 }
+        let changed = scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }
+        guard !changed.isEmpty else {
+            banner = SessionBanner(text: isViewed ? "Already viewed." : "Nothing to unmark.")
+            return 0
+        }
+        let viewed = isViewed ? review.viewed.union(changed) : review.viewed.subtracting(changed)
+        self.review = review.withViewed(viewed)
+        AppLog.info("review", "Bulk viewed mark; scope=\(scope); isViewed=\(isViewed); changed=\(changed.count)")
+        persistViewed()
+        let noun = changed.count == 1 ? "file" : "files"
+        banner = SessionBanner(text: "Marked \(changed.count) \(noun) \(isViewed ? "viewed" : "unviewed").")
+        return changed.count
+    }
+
     // MARK: - Resolve / unresolve (optimistic + rollback)
 
     /// Toggles a thread's resolved state optimistically, then syncs with
