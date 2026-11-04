@@ -239,7 +239,7 @@ private struct SideBySideDiffPane: View {
     }
 }
 
-private struct SideBySideDiffLineCell: View {
+struct SideBySideDiffLineCell: View {
     @Environment(\.diffFontSize) private var diffFontSize
     enum Side {
         case old
