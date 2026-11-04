@@ -276,6 +276,12 @@ public struct ReviewPresentation {
 
     /// Maps a file's core rows to display rows with stable, anchor-derived IDs
     /// (precomputed at build time).
+    /// Files in this diff marked viewed; a mark left on a file that is no
+    /// longer in the pull request does not count.
+    public var viewedFileCount: Int {
+        files.reduce(0) { $0 + (viewed.contains($1.path) ? 1 : 0) }
+    }
+
     public func diffRows(for file: DiffFile) -> [DiffDisplayRow] {
         diffRowsByFile[file.path] ?? []
     }

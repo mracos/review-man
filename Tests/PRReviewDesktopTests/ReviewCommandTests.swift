@@ -166,6 +166,18 @@ final class ReviewCommandTests: XCTestCase {
         XCTAssertEqual(store.review?.viewed, Set(paths), "an already viewed file stays viewed")
     }
 
+    @MainActor
+    func testViewedCountOnlyCountsFilesInTheDiff() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        let paths = store.review?.files.map(\.path) ?? []
+
+        store.toggleViewed(filePath: paths[0])
+        store.toggleViewed(filePath: "Gone.swift")
+
+        XCTAssertEqual(store.review?.viewedFileCount, 1)
+        XCTAssertEqual(store.review?.files.count, 3)
+    }
+
     private var threeFileDiff: String {
         sampleDiff + """
 
