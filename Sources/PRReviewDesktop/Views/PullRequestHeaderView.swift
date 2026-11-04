@@ -36,6 +36,7 @@ public struct PullRequestHeaderView: View {
                         checksLabel(checks)
                     }
                     Spacer()
+                    viewedProgress
                     Text(verbatim: "+\(pr.additions)  −\(pr.deletions)  · \(pr.changedFiles) files")
                         .foregroundStyle(.secondary)
                 }
@@ -92,6 +93,24 @@ public struct PullRequestHeaderView: View {
         return Label("checks: " + parts.joined(separator: ", "), systemImage: icon)
             .foregroundStyle(color)
             .accessibilityIdentifier("pr-checks")
+    }
+
+    /// GitHub's "X / Y files viewed": how far through the review you are.
+    @ViewBuilder
+    private var viewedProgress: some View {
+        let total = review.files.count
+        if total > 0 {
+            let viewed = review.viewedFileCount
+            HStack(spacing: 6) {
+                ProgressView(value: Double(viewed), total: Double(total))
+                    .progressViewStyle(.linear)
+                    .frame(width: 60)
+                Text(verbatim: "\(viewed) of \(total) viewed")
+                    .foregroundStyle(viewed == total ? .green : .secondary)
+            }
+            .help("Files you marked viewed in this pull request")
+            .accessibilityIdentifier("pr-viewed-progress")
+        }
     }
 
     private var reviewDecisionLabel: String? {
