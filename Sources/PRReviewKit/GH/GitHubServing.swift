@@ -27,6 +27,10 @@ public protocol GitHubServing {
     /// Runs the direct `gh` dependency health checks (version, auth, minimal
     /// API probe) and returns an actionable status.
     func dependencyStatus() async -> GitHubDependencyStatus
+    /// What the viewer may do to the pull request (merge, approve, close...).
+    func fetchActionState(_ endpoint: PREndpoint) async throws -> PRActionState?
+    /// Runs a pull request action such as merging or approving.
+    func perform(_ action: PRAction, on endpoint: PREndpoint) async throws
 }
 
 public extension GitHubServing {
@@ -34,5 +38,12 @@ public extension GitHubServing {
     /// need to implement health probing. `GitHubClient` overrides this.
     func dependencyStatus() async -> GitHubDependencyStatus {
         GitHubDependencyStatus(state: .checking)
+    }
+
+    /// Default: no actions, so read-only test doubles show no controls.
+    func fetchActionState(_ endpoint: PREndpoint) async throws -> PRActionState? { nil }
+
+    func perform(_ action: PRAction, on endpoint: PREndpoint) async throws {
+        throw GitHubError.api("Pull request actions are not supported here")
     }
 }

@@ -50,6 +50,24 @@ private struct GQLRepo: Decodable {
     let pullRequest: GQLPR
 }
 
+private struct GQLActionData: Decodable {
+    struct Repo: Decodable {
+        let viewerPermission: String?
+        let mergeCommitAllowed: Bool
+        let squashMergeAllowed: Bool
+        let rebaseMergeAllowed: Bool
+        let pullRequest: PR?
+    }
+    struct PR: Decodable {
+        let state: String
+        let isDraft: Bool
+        let mergeable: String
+        let viewerCanUpdate: Bool
+        let viewerDidAuthor: Bool
+    }
+    let repository: Repo?
+}
+
 private struct GQLThreadsData: Decodable {
     let repository: GQLRepo
 }
@@ -504,5 +522,38 @@ public final class GitHubClient: GitHubServing {
         struct EmptyData: Decodable {}
         _ = try await runGraphQL(query: mutation, variables: ["id": .string(threadID)]) as EmptyData
         AppLog.info("review", "Updated thread resolution for \(ep); threadID=\(threadID); resolved=\(resolved)")
+    }
+
+    // MARK: - Pull request actions
+
+    public func fetchActionState(_ ep: PREndpoint) async throws -> PRActionState? {
+        let query = """
+        query($owner: String!, $repo: String!, $number: Int!) {
+          repository(owner: $owner, name: $repo) {
+            viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
+            pullRequest(number: $number) { state isDraft mergeable viewerCanUpdate viewerDidAuthor }
+          }
+        }
+        """
+        let data: GQLActionData = try await runGraphQL(query: query, variables: [
+            "owner": .string(ep.owner), "repo": .string(ep.repo), "number": .string(String(ep.number)),
+        ])
+        guard let repo = data.repository, let pr = repo.pullRequest else { return nil }
+        var methods: [MergeMethod] = []
+        if repo.squashMergeAllowed { methods.append(.squash) }
+        if repo.mergeCommitAllowed { methods.append(.merge) }
+        if repo.rebaseMergeAllowed { methods.append(.rebase) }
+        return PRActionState(
+            state: pr.state, isDraft: pr.isDraft, mergeable: pr.mergeable,
+            viewerPermission: repo.viewerPermission ?? "READ",
+            viewerCanUpdate: pr.viewerCanUpdate, viewerDidAuthor: pr.viewerDidAuthor,
+            allowedMergeMethods: methods
+        )
+    }
+
+    public func perform(_ action: PRAction, on ep: PREndpoint) async throws {
+        AppLog.info("review", "Running \(action) on \(ep)")
+        _ = try await commandRunner.run(action.arguments(for: ep), timeout: GH.defaultTimeout)
+        AppLog.info("review", "Ran \(action) on \(ep)")
     }
 }

@@ -340,6 +340,9 @@ public struct ReviewWindowView: View {
         if let review = store.review {
             VStack(spacing: 0) {
                 PullRequestHeaderView(review: review)
+                if let actions = store.actionState, actions.hasAnyAction {
+                    PRActionsBar(store: store, actions: actions)
+                }
                 if !review.hiddenReviewers.isEmpty {
                     hiddenReviewersStrip(review)
                 }

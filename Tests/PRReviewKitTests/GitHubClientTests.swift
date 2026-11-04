@@ -321,4 +321,32 @@ final class GitHubClientTests: XCTestCase {
             XCTFail("unexpected error: \(error)")
         }
     }
+
+    func testFetchActionStateReadsPermissionAndAllowedMergeMethods() async throws {
+        let runner = ScriptedCommandRunner()
+        runner.results = [GH.Result(data: Data("""
+        {"data":{"repository":{"viewerPermission":"ADMIN","mergeCommitAllowed":false,
+          "squashMergeAllowed":true,"rebaseMergeAllowed":true,
+          "pullRequest":{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+            "viewerCanUpdate":true,"viewerDidAuthor":false}}}}
+        """.utf8), stderr: "")]
+        let client = GitHubClient(commandRunner: runner)
+
+        let state = try await client.fetchActionState(ep)
+
+        XCTAssertEqual(state?.viewerPermission, "ADMIN")
+        XCTAssertEqual(state?.mergeMethods, [.squash, .rebase])
+        XCTAssertTrue(state?.canApprove ?? false)
+        XCTAssertTrue(runner.calls[0].contains("number=3"))
+        XCTAssertTrue(runner.calls[0].contains("owner=o"))
+    }
+
+    func testPerformRunsTheActionsGhArguments() async throws {
+        let runner = ScriptedCommandRunner()
+        let client = GitHubClient(commandRunner: runner)
+
+        try await client.perform(.merge(.squash), on: ep)
+
+        XCTAssertEqual(runner.calls, [["pr", "merge", "3", "--repo", "o/r", "--squash"]])
+    }
 }

@@ -568,7 +568,9 @@ public extension ReviewSessionStore {
     // MARK: - Refresh (with selection preservation)
 
     /// Refreshes via the shared migration path, preserving the selected path.
-    func refresh() {
+    /// `completionMessage` replaces the migration summary in the banner, so
+    /// the result of what triggered the refresh stays visible.
+    func refresh(completionMessage: String? = nil) {
         guard let endpoint = session.endpoint, !demoSession else {
             banner = SessionBanner(text: "Demo mode — nothing to refresh.")
             return
@@ -618,8 +620,9 @@ public extension ReviewSessionStore {
                     files.contains { $0.path == path } ? path : nil
                 }
                 self.selection = ReviewSelection(filePath: kept ?? files.first?.path)
-                self.banner = SessionBanner(text: result.message)
+                self.banner = SessionBanner(text: completionMessage ?? result.message)
                 self.isBusy = false
+                self.loadActionState()
                 AppLog.info("refresh", "Completed refresh generation=\(generation); selectedPath=\(self.selection.filePath ?? "none"); message=\(result.message)")
             } catch is CancellationError {
                 AppLog.warning("refresh", "Refresh generation=\(generation) cancelled")
