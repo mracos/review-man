@@ -227,6 +227,21 @@ final class ReviewCommandTests: XCTestCase {
         XCTAssertEqual(store.review?.files.count, 3)
     }
 
+    @MainActor
+    func testBulkViewedMarksOnlyWhatChangesAndPersistsOnce() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        store.toggleViewed(filePath: "README.md")
+
+        let marked = store.setViewed(.fileExtension("md"), viewed: true)
+
+        XCTAssertEqual(marked, 1, "README.md was already viewed")
+        XCTAssertEqual(store.review?.viewed, ["README.md", "NOTES.md"])
+        XCTAssertEqual(store.banner?.text, "Marked 1 file viewed.")
+
+        XCTAssertEqual(store.setViewed(.all, viewed: false), 2)
+        XCTAssertEqual(store.review?.viewed, [])
+    }
+
     private var threeFileDiff: String {
         sampleDiff + """
 

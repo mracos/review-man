@@ -432,6 +432,17 @@ final class ReviewWorkflowTests: XCTestCase {
         XCTAssertEqual(service.setViewedCalls, ["PR_1 Src.swift false"])
     }
 
+    func testBulkViewedSyncsOnlyFilesWhoseMarkChanged() {
+        let (service, _, store) = makeRealStore(viewedOnGitHub: ["Src.swift"], syncViewed: true)
+        waitSync { store.review?.viewed.contains("Src.swift") ?? false }
+
+        XCTAssertEqual(store.setViewed(.all, viewed: true), 0)
+        XCTAssertEqual(store.setViewed(.all, viewed: false), 1)
+
+        waitSync { !service.setViewedCalls.isEmpty }
+        XCTAssertEqual(service.setViewedCalls, ["PR_1 Src.swift false"])
+    }
+
     // MARK: - Context expansion
 
     /// A 60-line file changed at line 50: one hunk with 46 lines hidden above.

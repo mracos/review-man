@@ -386,6 +386,34 @@ public extension ReviewSessionStore {
         pushViewedToGitHub(path: filePath, viewed: viewed.contains(filePath))
     }
 
+    /// How many files `setViewed(scope, viewed:)` would change, for menu labels.
+    func viewedChangeCount(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
+        guard let review else { return 0 }
+        return scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }.count
+    }
+
+    /// Marks every file in `scope` viewed or unviewed at once, persisting
+    /// once. Only files whose mark changes are synced to GitHub.
+    @discardableResult
+    func setViewed(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
+        guard let review else { return 0 }
+        let changed = scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }
+        guard !changed.isEmpty else {
+            banner = SessionBanner(text: isViewed ? "Already viewed." : "Nothing to unmark.")
+            return 0
+        }
+        let viewed = isViewed ? review.viewed.union(changed) : review.viewed.subtracting(changed)
+        self.review = review.withViewed(viewed)
+        AppLog.info("review", "Bulk viewed mark; scope=\(scope); isViewed=\(isViewed); changed=\(changed.count)")
+        persistViewed()
+        for path in changed {
+            pushViewedToGitHub(path: path, viewed: isViewed)
+        }
+        let noun = changed.count == 1 ? "file" : "files"
+        banner = SessionBanner(text: "Marked \(changed.count) \(noun) \(isViewed ? "viewed" : "unviewed").")
+        return changed.count
+    }
+
     /// With sync on, adds the files marked viewed on GitHub to the local
     /// marks. Additive: a file only viewed locally stays viewed.
     func pullViewedFromGitHub() {

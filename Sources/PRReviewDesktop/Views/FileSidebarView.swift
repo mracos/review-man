@@ -151,6 +151,8 @@ public struct FileSidebarView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Clear file filter")
             }
+
+            BulkViewedMenu(store: store)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -211,6 +213,16 @@ private struct SidebarFileTreeRow: View {
                 }
             } label: {
                 folderLabel
+            }
+            .contextMenu {
+                let scope = BulkViewedScope.folder(node.path)
+                let unviewed = store.viewedChangeCount(scope, viewed: true)
+                if unviewed > 0 {
+                    Button("Mark Folder Viewed (\(unviewed))" as String) { store.setViewed(scope, viewed: true) }
+                }
+                if unviewed < node.fileCount {
+                    Button("Mark Folder Unviewed" as String) { store.setViewed(scope, viewed: false) }
+                }
             }
             .accessibilityIdentifier("sidebar-folder-\(node.path)")
             .accessibilityLabel("\(node.name), folder, \(node.fileCount) \(node.fileCount == 1 ? "file" : "files")")
@@ -315,6 +327,15 @@ private struct SidebarFileItemRow: View {
             Button(item.isViewed ? "Mark Unviewed" : "Mark Viewed") {
                 store.toggleViewed(filePath: item.path)
             }
+            if let ext = BulkViewedScope.fileExtension(of: item.path) {
+                let scope = BulkViewedScope.fileExtension(ext)
+                let count = store.viewedChangeCount(scope, viewed: true)
+                if count > 0 {
+                    Button("Mark All .\(ext) Files Viewed (\(count))" as String) {
+                        store.setViewed(scope, viewed: true)
+                    }
+                }
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.path), status \(item.statusLetter)\(item.threadCount > 0 ? ", \(item.threadCount) comments" : "")\(item.isViewed ? ", viewed" : "")")
@@ -415,5 +436,45 @@ struct FileSidebarTreeNode: Identifiable, Equatable {
 
     private static func pathComponents(_ path: String) -> [String] {
         path.split(separator: "/").map(String.init)
+    }
+}
+
+/// Marks groups of files viewed at once: everything, deletions, pure renames,
+/// or whatever the filter currently matches. Entries that would change
+/// nothing are hidden.
+private struct BulkViewedMenu: View {
+    @ObservedObject var store: ReviewSessionStore
+
+    var body: some View {
+        Menu {
+            let filtered = store.sidebarSearch.isEmpty ? nil : BulkViewedScope.paths(store.filteredSidebarItems.map(\.path))
+            if let filtered {
+                entry("Files Matching Filter", filtered)
+            }
+            entry("All Files", .all)
+            entry("Deleted Files", .deleted)
+            entry("Renamed Without Changes", .pureRenames)
+            Divider()
+            if let filtered, store.viewedChangeCount(filtered, viewed: false) > 0 {
+                Button("Unmark Files Matching Filter" as String) { store.setViewed(filtered, viewed: false) }
+            }
+            Button("Unmark All" as String) { store.setViewed(.all, viewed: false) }
+                .disabled(store.viewedChangeCount(.all, viewed: false) == 0)
+        } label: {
+            Image(systemName: "checkmark.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Mark files viewed in bulk")
+        .accessibilityIdentifier("sidebar-bulk-viewed")
+    }
+
+    @ViewBuilder
+    private func entry(_ title: String, _ scope: BulkViewedScope) -> some View {
+        let count = store.viewedChangeCount(scope, viewed: true)
+        if count > 0 {
+            Button("Mark \(title) Viewed (\(count))" as String) { store.setViewed(scope, viewed: true) }
+        }
     }
 }
