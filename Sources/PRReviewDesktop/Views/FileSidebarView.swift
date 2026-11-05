@@ -439,9 +439,7 @@ struct FileSidebarTreeNode: Identifiable, Equatable {
     }
 }
 
-/// Marks groups of files viewed at once: everything, deletions, pure renames,
-/// or whatever the filter currently matches. Entries that would change
-/// nothing are hidden.
+/// Entries that would change nothing are hidden.
 private struct BulkViewedMenu: View {
     @ObservedObject var store: ReviewSessionStore
 

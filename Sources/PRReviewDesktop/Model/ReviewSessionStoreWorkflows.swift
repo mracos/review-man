@@ -386,14 +386,12 @@ public extension ReviewSessionStore {
         pushViewedToGitHub(path: filePath, viewed: viewed.contains(filePath))
     }
 
-    /// How many files `setViewed(scope, viewed:)` would change, for menu labels.
     func viewedChangeCount(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
         guard let review else { return 0 }
         return scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }.count
     }
 
-    /// Marks every file in `scope` viewed or unviewed at once, persisting
-    /// once. Only files whose mark changes are synced to GitHub.
+    /// Only files whose mark changes are synced to GitHub.
     @discardableResult
     func setViewed(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
         guard let review else { return 0 }

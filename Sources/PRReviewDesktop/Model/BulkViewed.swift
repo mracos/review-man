@@ -1,17 +1,12 @@
 import Foundation
 
-/// A group of files to mark viewed (or unviewed) in one go.
 public enum BulkViewedScope: Equatable {
     case all
-    /// Files the pull request deletes.
     case deleted
     /// Renames and moves that change no lines.
     case pureRenames
-    /// Every file under a folder, at any depth.
     case folder(String)
-    /// Every file sharing an extension, such as `lock` or `snap`.
     case fileExtension(String)
-    /// The given paths, such as the sidebar's current filter results.
     case paths([String])
 
     public func paths(in items: [FileSidebarItem]) -> [String] {
@@ -35,8 +30,7 @@ public enum BulkViewedScope: Equatable {
         }
     }
 
-    /// The extension after the last dot of the file name, or nil for names
-    /// without one (`Makefile`) or dotfiles (`.gitignore`).
+    /// Nil for names without one (`Makefile`) and for dotfiles (`.gitignore`).
     public static func fileExtension(of path: String) -> String? {
         let name = path.split(separator: "/").last.map(String.init) ?? path
         guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return nil }
