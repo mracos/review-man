@@ -212,17 +212,19 @@ private struct SidebarFileTreeRow: View {
                     )
                 }
             } label: {
+                // On the label, not the group: a group's menu also covers its
+                // nested rows, so a subfolder would get its parent's menu.
                 folderLabel
-            }
-            .contextMenu {
-                let scope = BulkViewedScope.folder(node.path)
-                let unviewed = store.viewedChangeCount(scope, viewed: true)
-                if unviewed > 0 {
-                    Button("Mark Folder Viewed (\(unviewed))" as String) { store.setViewed(scope, viewed: true) }
-                }
-                if unviewed < node.fileCount {
-                    Button("Mark Folder Unviewed" as String) { store.setViewed(scope, viewed: false) }
-                }
+                    .contextMenu {
+                        let scope = BulkViewedScope.folder(node.path)
+                        let unviewed = store.viewedChangeCount(scope, viewed: true)
+                        if unviewed > 0 {
+                            Button("Mark \(node.name) Viewed (\(unviewed))" as String) { store.setViewed(scope, viewed: true) }
+                        }
+                        if unviewed < node.fileCount {
+                            Button("Mark \(node.name) Unviewed" as String) { store.setViewed(scope, viewed: false) }
+                        }
+                    }
             }
             .accessibilityIdentifier("sidebar-folder-\(node.path)")
             .accessibilityLabel("\(node.name), folder, \(node.fileCount) \(node.fileCount == 1 ? "file" : "files")")
