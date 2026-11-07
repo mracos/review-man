@@ -29,6 +29,8 @@ public enum ReviewFocusTarget: Equatable {
 public final class ReviewSessionStore: ObservableObject {
 
     @Published public var state: PresentationState = .welcome
+    /// Steps of the load in flight; reset by every load.
+    @Published public private(set) var loadProgress = LoadProgress()
     @Published public var review: ReviewPresentation?
     @Published public var selection = ReviewSelection()
     @Published public var sidebarSearch = ""
@@ -162,11 +164,18 @@ public final class ReviewSessionStore: ObservableObject {
         lastRequestedReference = demo ? "demo" : reference
         let label = demo ? "demo-\(scale)" : (reference ?? "")
         AppLog.info("store", "Starting load generation=\(generation); reference=\(label); demo=\(demo)")
+        loadProgress = LoadProgress()
         state = .loading(reference: label)
         isBusy = true
         banner = nil
 
         let loader = ReviewSessionLoader(service: service, persistence: persistence)
+        let reportProgress: @Sendable (LoadProgress.Event) -> Void = { [weak self] event in
+            Task { @MainActor in
+                guard let self, generation == self.loadGeneration else { return }
+                self.loadProgress.apply(event)
+            }
+        }
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -174,7 +183,7 @@ public final class ReviewSessionStore: ObservableObject {
                 if demo {
                     presentation = try await loader.loadDemo(scale: scale, files: files, lines: lines)
                 } else {
-                    presentation = try await loader.load(reference: reference ?? "")
+                    presentation = try await loader.load(reference: reference ?? "", progress: reportProgress)
                 }
                 try Task.checkCancellation()
                 guard generation == self.loadGeneration else { return }
@@ -193,6 +202,7 @@ public final class ReviewSessionStore: ObservableObject {
                 self.selection = ReviewSelection(filePath: path)
                 self.state = presentation.files.isEmpty ? .empty : .loaded
                 self.isBusy = false
+                self.banner = Self.incompleteDiffBanner(for: presentation)
                 AppLog.info("store", "Load generation=\(generation) succeeded; files=\(presentation.files.count); state=\(presentation.files.isEmpty ? "empty" : "loaded")")
             } catch is CancellationError {
                 AppLog.warning("store", "Load generation=\(generation) cancelled")
@@ -206,6 +216,20 @@ public final class ReviewSessionStore: ObservableObject {
                 self.isBusy = false
             }
         }
+    }
+
+    /// Says when GitHub left part of the pull request out: past its file
+    /// listing limit, or files whose diff it would not render.
+    static func incompleteDiffBanner(for presentation: ReviewPresentation) -> SessionBanner? {
+        var notes: [String] = []
+        if let total = presentation.pr?.changedFiles, total > presentation.files.count {
+            notes.append("GitHub lists only \(presentation.files.count.formatted()) of \(total.formatted()) files; \((total - presentation.files.count).formatted()) are not shown.")
+        }
+        let tooLarge = presentation.files.filter(\.tooLarge).count
+        if tooLarge > 0 {
+            notes.append("\(tooLarge.formatted()) \(tooLarge == 1 ? "file is" : "files are") too large for GitHub to show a diff (marked !).")
+        }
+        return notes.isEmpty ? nil : SessionBanner(text: notes.joined(separator: " "))
     }
 
     // MARK: - Sidebar selection

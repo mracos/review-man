@@ -264,11 +264,39 @@ public struct ReviewWindowView: View {
     }
 
     private func loadingView(reference: String) -> some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .controlSize(.large)
-            Text("Opening \(reference)…")
-                .foregroundStyle(.secondary)
+        let progress = store.loadProgress
+        return VStack(spacing: 12) {
+            if let fraction = progress.fractionCompleted {
+                ProgressView(value: fraction)
+                    .frame(width: 280)
+            } else {
+                ProgressView()
+                    .controlSize(.large)
+            }
+            Text("Opening \(reference)")
+                .font(.headline)
+            Text(progress.headline)
+                .monospacedDigit()
+                .accessibilityIdentifier("loading-stage")
+            if let size = progress.sizeSummary {
+                Text(size)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            if let note = progress.note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+            }
+            TimelineView(.periodic(from: progress.startedAt, by: 1)) { context in
+                Text("\(Int(context.date.timeIntervalSince(progress.startedAt)))s")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
             Button("Cancel") { store.cancelLoad() }
         }
         .padding(40)

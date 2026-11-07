@@ -20,6 +20,17 @@ private final class ScriptedCommandRunner: CommandRunning {
     }
 }
 
+private final class ProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [FetchProgress] = []
+
+    var all: [FetchProgress] { lock.withLock { events } }
+
+    func record(_ event: FetchProgress) {
+        lock.withLock { events.append(event) }
+    }
+}
+
 final class GitHubClientTests: XCTestCase {
 
     private let ep = PREndpoint(owner: "o", repo: "r", number: 3)
@@ -102,6 +113,51 @@ final class GitHubClientTests: XCTestCase {
 
         XCTAssertEqual(runner.calls.count, 1)
         XCTAssertTrue(files.isEmpty)
+    }
+
+    /// GitHub refuses diffs over 300 files; the fallback pages through the
+    /// files 100 at a time and reports each page.
+    func testFetchDiffFallbackPagesAndReportsProgress() async throws {
+        let runner = ScriptedCommandRunner()
+        runner.errors = [GitHubError.commandFailed(command: "gh api", stderr: "HTTP 406")]
+        runner.results = [
+            GH.Result(data: Data(filesPage(count: 100, offset: 0).utf8), stderr: ""),
+            GH.Result(data: Data(filesPage(count: 100, offset: 100).utf8), stderr: ""),
+            GH.Result(data: Data(filesPage(count: 7, offset: 200).utf8), stderr: ""),
+        ]
+        let events = ProgressRecorder()
+        let client = GitHubClient(commandRunner: runner)
+
+        let files = try await client.fetchDiff(ep, progress: events.record)
+
+        XCTAssertEqual(files.count, 207)
+        XCTAssertEqual(runner.calls.count, 4)
+        XCTAssertTrue(runner.calls[1].joined(separator: " ").contains("files?per_page=100&page=1"))
+        XCTAssertTrue(runner.calls[3].joined(separator: " ").contains("files?per_page=100&page=3"))
+        XCTAssertEqual(events.all, [.diffRefused, .filesFetched(100), .filesFetched(200), .filesFetched(207)])
+    }
+
+    /// GitHub lists at most 3,000 files, so paging stops there even when
+    /// every page comes back full.
+    func testFetchDiffFallbackStopsAtGitHubFileLimit() async throws {
+        let runner = ScriptedCommandRunner()
+        runner.errors = [GitHubError.commandFailed(command: "gh api", stderr: "HTTP 406")]
+        runner.results = (0..<40).map { page in
+            GH.Result(data: Data(filesPage(count: 100, offset: page * 100).utf8), stderr: "")
+        }
+        let client = GitHubClient(commandRunner: runner)
+
+        let files = try await client.fetchDiff(ep)
+
+        XCTAssertEqual(files.count, GitHubClient.maxListedFiles)
+        XCTAssertEqual(runner.calls.count, 1 + GitHubClient.maxListedFiles / 100)
+    }
+
+    private func filesPage(count: Int, offset: Int) -> String {
+        let entries = (0..<count).map { i in
+            #"{"filename":"f\#(offset + i).txt","status":"modified","additions":1,"deletions":0,"changes":1,"patch":"@@ -1 +1,2 @@\n x\n+y\n"}"#
+        }
+        return "[" + entries.joined(separator: ",") + "]"
     }
 
     // MARK: - GraphQL variables (no interpolation of IDs or cursors)

@@ -292,7 +292,7 @@ public final class GitHubClient: GitHubServing {
     /// Fetches the full unified diff; falls back to the per-file `files`
     /// endpoint when the raw diff fails (huge PRs, 406s, etc). Cancellation is
     /// never swallowed by the fallback.
-    public func fetchDiff(_ ep: PREndpoint) async throws -> [DiffFile] {
+    public func fetchDiff(_ ep: PREndpoint, progress: @escaping FetchProgressHandler = { _ in }) async throws -> [DiffFile] {
         AppLog.info("github", "Fetching diff for \(ep)")
         do {
             let r = try await commandRunner.run([
@@ -312,8 +312,14 @@ public final class GitHubClient: GitHubServing {
         } catch {
             AppLog.failure("github", context: "Raw diff fetch failed for \(ep); using file fallback", error: error)
         }
-        return try await fetchFilesFallback(ep)
+        progress(.diffRefused)
+        return try await fetchFilesFallback(ep, progress: progress)
     }
+
+    /// Files per page of the fallback; GitHub's maximum.
+    static let filesPageSize = 100
+    /// GitHub lists at most this many files for a pull request.
+    public static let maxListedFiles = 3000
 
     private struct PRFileDTO: Decodable {
         let filename: String
@@ -325,11 +331,21 @@ public final class GitHubClient: GitHubServing {
         let previous_filename: String?
     }
 
-    private func fetchFilesFallback(_ ep: PREndpoint) async throws -> [DiffFile] {
+    /// Pages by hand rather than with `--paginate` so each page can report
+    /// progress.
+    private func fetchFilesFallback(_ ep: PREndpoint, progress: FetchProgressHandler) async throws -> [DiffFile] {
         AppLog.info("github", "Fetching per-file diff fallback for \(ep)")
-        let dtos: [PRFileDTO] = try await runJSON([
-            "api", "repos/\(ep.owner)/\(ep.repo)/pulls/\(ep.number)/files", "--paginate",
-        ])
+        var dtos: [PRFileDTO] = []
+        var page = 1
+        while true {
+            let batch: [PRFileDTO] = try await runJSON([
+                "api", "repos/\(ep.owner)/\(ep.repo)/pulls/\(ep.number)/files?per_page=\(Self.filesPageSize)&page=\(page)",
+            ])
+            dtos += batch
+            progress(.filesFetched(dtos.count))
+            if batch.count < Self.filesPageSize || dtos.count >= Self.maxListedFiles { break }
+            page += 1
+        }
         let files = dtos.map { dto in
             var file = DiffFile()
             switch dto.status {
@@ -478,16 +494,26 @@ public final class GitHubClient: GitHubServing {
     }
 
     public func fetchAll(_ ep: PREndpoint) async throws -> FetchBundle {
+        try await fetchAll(ep, progress: { _ in })
+    }
+
+    public func fetchAll(_ ep: PREndpoint, progress: @escaping FetchProgressHandler) async throws -> FetchBundle {
         AppLog.info("github", "Starting concurrent PR fetch for \(ep)")
         // The three top-level fetches are independent; running them
         // concurrently hides subprocess startup and network latency behind each
         // other. Cancellation propagates to all three via `async let`.
-        async let pr = fetchPRInfo(ep)
-        async let files = fetchDiff(ep)
+        async let pr = fetchPRInfo(ep, progress: progress)
+        async let files = fetchDiff(ep, progress: progress)
         async let threads = fetchThreads(ep)
         let bundle = try await FetchBundle(pr: pr, files: files, threads: threads)
         AppLog.info("github", "Completed concurrent PR fetch for \(ep); files=\(bundle.files.count); threads=\(bundle.threads.count)")
         return bundle
+    }
+
+    private func fetchPRInfo(_ ep: PREndpoint, progress: FetchProgressHandler) async throws -> PRInfo {
+        let info = try await fetchPRInfo(ep)
+        progress(.size(files: info.changedFiles, additions: info.additions, deletions: info.deletions))
+        return info
     }
 
     // MARK: - Writes

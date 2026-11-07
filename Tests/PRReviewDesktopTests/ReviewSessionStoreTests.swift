@@ -31,11 +31,37 @@ private final class FakeService: GitHubServing {
     func resolveThread(_ ep: PREndpoint, threadID: String, resolved: Bool) async throws {}
 }
 
-private func makePR(title: String = "PR") -> PRInfo {
+/// Reports a paged fetch, then holds the load open until released.
+private final class ProgressReportingService: GitHubServing {
+    var bundle: FetchBundle
+    var released = false
+
+    init(bundle: FetchBundle) {
+        self.bundle = bundle
+    }
+
+    func ensureAvailable() async throws {}
+    func resolveEndpoint(from argument: String) async throws -> PREndpoint {
+        PREndpoint(owner: "o", repo: "r", number: 1)
+    }
+    func fetchAll(_ ep: PREndpoint) async throws -> FetchBundle { bundle }
+    func fetchAll(_ ep: PREndpoint, progress: @escaping FetchProgressHandler) async throws -> FetchBundle {
+        progress(.size(files: bundle.pr.changedFiles, additions: 10, deletions: 4))
+        progress(.diffRefused)
+        progress(.filesFetched(bundle.files.count))
+        while !released { try await Task.sleep(nanoseconds: 5_000_000) }
+        return bundle
+    }
+    func submitReview(_ ep: PREndpoint, commitID: String, body: String, event: String, drafts: [DraftComment]) async throws {}
+    func replyToThread(_ ep: PREndpoint, commentID: Int, body: String) async throws {}
+    func resolveThread(_ ep: PREndpoint, threadID: String, resolved: Bool) async throws {}
+}
+
+private func makePR(title: String = "PR", changedFiles: Int = 1) -> PRInfo {
     PRInfo(
         number: 1, title: title, body: nil, author: "a", state: "OPEN",
         isDraft: false, headRefOid: "sha1", headRefName: "head", baseRefName: "base",
-        additions: 10, deletions: 4, changedFiles: 1, reviewDecision: nil,
+        additions: 10, deletions: 4, changedFiles: changedFiles, reviewDecision: nil,
         url: "https://github.com/o/r/pull/1"
     )
 }
@@ -147,6 +173,54 @@ final class ReviewSessionStoreTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(store.state, .loaded)
         XCTAssertEqual(store.review?.pr?.title, "PR")
+    }
+
+    func testLoadPublishesProgressWhileFetching() async {
+        let service = ProgressReportingService(bundle: FetchBundle(
+            pr: makePR(changedFiles: 1), files: DiffParser.parse(sampleDiff), threads: []
+        ))
+        let store = ReviewSessionStore(service: service, persistence: InMemoryPersistence())
+
+        store.open(reference: "o/r#1")
+        await waitFor { store.loadProgress.fetchedFiles == 1 }
+
+        XCTAssertEqual(store.loadProgress.stage, .fetching)
+        XCTAssertEqual(store.loadProgress.headline, "Fetching files: 1 of 1")
+        service.released = true
+        await waitFor { store.state == .loaded }
+        XCTAssertEqual(store.state, .loaded)
+    }
+
+    func testLoadSaysWhenGitHubLeftFilesOut() async {
+        var tooLarge = DiffFile()
+        tooLarge.newPath = "huge.json"
+        tooLarge.tooLarge = true
+        let service = FakeService()
+        service.bundle = FetchBundle(
+            pr: makePR(changedFiles: 3_200),
+            files: DiffParser.parse(sampleDiff) + [tooLarge],
+            threads: []
+        )
+        let store = ReviewSessionStore(service: service, persistence: InMemoryPersistence())
+
+        store.open(reference: "o/r#1")
+        await waitFor { store.state == .loaded }
+
+        let banner = try? XCTUnwrap(store.banner)
+        XCTAssertEqual(banner?.isError, false)
+        XCTAssertTrue(banner?.text.contains("only 2 of \(3_200.formatted()) files") ?? false, banner?.text ?? "no banner")
+        XCTAssertTrue(banner?.text.contains("1 file is too large") ?? false, banner?.text ?? "no banner")
+    }
+
+    func testCompleteLoadShowsNoBanner() async {
+        let service = FakeService()
+        service.bundle = FetchBundle(pr: makePR(), files: DiffParser.parse(sampleDiff), threads: [])
+        let store = ReviewSessionStore(service: service, persistence: InMemoryPersistence())
+
+        store.open(reference: "o/r#1")
+        await waitFor { store.state == .loaded }
+
+        XCTAssertNil(store.banner)
     }
 
     func testCancelLoadDiscardsInFlightResult() async {
