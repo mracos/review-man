@@ -35,7 +35,10 @@ public struct FileSidebarView: View {
     }
 
     public var body: some View {
-        let fileTree = FileSidebarTreeNode.build(from: store.filteredSidebarItems)
+        let fileRows = FileSidebarTreeNode.visibleRows(
+            of: FileSidebarTreeNode.build(from: store.filteredSidebarItems),
+            collapsed: collapsedFolderPaths
+        )
 
         VStack(spacing: 0) {
             fileFilter
@@ -55,6 +58,13 @@ public struct FileSidebarView: View {
                         AppLog.info("selection", "Sidebar selected change canvas")
                         showCanvas = true
                     } else if let selection {
+                        // Folder rows can be selected too (with the keyboard
+                        // or a click beside the label); they are not files,
+                        // so they never change the focus.
+                        guard store.review?.fileIndexByPath[selection] != nil else {
+                            store.objectWillChange.send()
+                            return
+                        }
                         AppLog.info("selection", "Sidebar selected file path=\(selection)")
                         showCanvas = false
                         store.select(filePath: selection)
@@ -82,15 +92,16 @@ public struct FileSidebarView: View {
             }
 
             Section("Files") {
-                if fileTree.isEmpty {
+                if fileRows.isEmpty {
                     Label("No matching files", systemImage: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("sidebar-no-file-matches")
                 } else {
-                    ForEach(fileTree) { node in
+                    ForEach(fileRows) { row in
                         SidebarFileTreeRow(
                             store: store,
-                            node: node,
+                            node: row.node,
+                            depth: row.depth,
                             collapsedFolderPaths: $collapsedFolderPaths,
                             highlightedSearchPath: highlightedSearchPath
                         )
@@ -182,38 +193,44 @@ public struct FileSidebarView: View {
     }
 }
 
-/// One recursive row in the sidebar's folder tree. A disclosure group is used
-/// instead of a flat OutlineGroup so folders can start expanded and matching
-/// search results can be revealed deterministically.
+/// One row of the sidebar's folder tree, indented by its depth. Folders
+/// toggle on click; their contents are separate rows (see `FileSidebarRow`).
 private struct SidebarFileTreeRow: View {
     @ObservedObject var store: ReviewSessionStore
     let node: FileSidebarTreeNode
+    let depth: Int
     @Binding var collapsedFolderPaths: Set<String>
     let highlightedSearchPath: String?
+
+    private static let indent: CGFloat = 14
 
     var body: some View {
         if let item = node.item {
             let isBestSearchMatch = item.path == highlightedSearchPath
             SidebarFileItemRow(store: store, item: item, displayName: node.name)
+                // Lines files up with their folder's name, past the chevron.
+                .padding(.leading, CGFloat(depth) * Self.indent + (depth > 0 ? Self.indent : 0))
                 .tag(item.path)
                 .listRowBackground(isBestSearchMatch ? Color.accentColor.opacity(0.18) : Color.clear)
                 .accessibilityIdentifier("sidebar-row-\(item.path)")
                 .accessibilityHint(isBestSearchMatch ? "Best matching file for the active filter" : "")
         } else {
-            DisclosureGroup(isExpanded: folderExpansion) {
-                ForEach(node.children) { child in
-                    SidebarFileTreeRow(
-                        store: store,
-                        node: child,
-                        collapsedFolderPaths: $collapsedFolderPaths,
-                        highlightedSearchPath: highlightedSearchPath
-                    )
-                }
-            } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(folderExpansion.wrappedValue ? 90 : 0))
+                    .frame(width: 10)
                 folderLabel
             }
+            .padding(.leading, CGFloat(depth) * Self.indent)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: toggleFolderExpansion)
+            .accessibilityElement(children: .combine)
             .accessibilityIdentifier("sidebar-folder-\(node.path)")
             .accessibilityLabel("\(node.name), folder, \(node.fileCount) \(node.fileCount == 1 ? "file" : "files")")
+            .accessibilityValue(folderExpansion.wrappedValue ? "expanded" : "collapsed")
+            .accessibilityAddTraits(.isButton)
         }
     }
 
@@ -245,10 +262,6 @@ private struct SidebarFileTreeRow: View {
             Image(systemName: folderExpansion.wrappedValue ? "folder.fill" : "folder")
                 .foregroundStyle(.secondary)
         }
-        // AppKit's DisclosureGroup only toggles from its disclosure indicator.
-        // Make the entire visible folder label provide the same action.
-        .contentShape(Rectangle())
-        .onTapGesture(perform: toggleFolderExpansion)
     }
 
     private func toggleFolderExpansion() {
@@ -338,6 +351,16 @@ private struct SidebarFileItemRow: View {
     }
 }
 
+/// One sidebar row. The tree is shown as a flat list with indentation
+/// rather than nested disclosure groups: SwiftUI's outline list can trip an
+/// internal assertion and crash while collapsing nested folders.
+struct FileSidebarRow: Identifiable {
+    let node: FileSidebarTreeNode
+    let depth: Int
+
+    var id: String { node.id }
+}
+
 /// A lightweight, pure representation of the sidebar tree. Its builder runs
 /// over the already filtered items, so each visible folder contains only the
 /// matching files and exposes an accurate badge count.
@@ -351,6 +374,22 @@ struct FileSidebarTreeNode: Identifiable, Equatable {
 
     static func build(from items: [FileSidebarItem]) -> [FileSidebarTreeNode] {
         build(items, depth: 0, folderPath: "")
+    }
+
+    /// The rows the sidebar shows, depth first, skipping what is inside a
+    /// collapsed folder.
+    static func visibleRows(of tree: [FileSidebarTreeNode], collapsed: Set<String>) -> [FileSidebarRow] {
+        var rows: [FileSidebarRow] = []
+        func walk(_ nodes: [FileSidebarTreeNode], depth: Int) {
+            for node in nodes {
+                rows.append(FileSidebarRow(node: node, depth: depth))
+                if node.item == nil, !collapsed.contains(node.id) {
+                    walk(node.children, depth: depth + 1)
+                }
+            }
+        }
+        walk(tree, depth: 0)
+        return rows
     }
 
     /// IDs for every folder in the complete (unfiltered) sidebar tree. The
