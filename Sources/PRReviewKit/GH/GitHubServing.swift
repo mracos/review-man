@@ -12,6 +12,9 @@ public protocol GitHubServing {
     func resolveEndpoint(from argument: String) async throws -> PREndpoint
     /// Fetches PR info, the diff, and review threads in one bundle.
     func fetchAll(_ endpoint: PREndpoint) async throws -> FetchBundle
+    /// `fetchAll`, reporting how far it got while it runs. Big pull requests
+    /// take several requests, and the window shows each step.
+    func fetchAll(_ endpoint: PREndpoint, progress: @escaping FetchProgressHandler) async throws -> FetchBundle
     /// Submits a review anchored to `commitID`.
     func submitReview(
         _ endpoint: PREndpoint,
@@ -44,7 +47,25 @@ public protocol GitHubServing {
     func perform(_ action: PRAction, on endpoint: PREndpoint) async throws
 }
 
+/// What a pull request fetch has got to.
+public enum FetchProgress: Equatable, Sendable {
+    /// The pull request's size, from its metadata.
+    case size(files: Int, additions: Int, deletions: Int)
+    /// GitHub refused the diff in one piece (over 300 files or too many
+    /// lines), so files come page by page.
+    case diffRefused
+    /// Files fetched so far through those pages.
+    case filesFetched(Int)
+}
+
+public typealias FetchProgressHandler = @Sendable (FetchProgress) -> Void
+
 public extension GitHubServing {
+    /// Default: no progress, so test doubles need only `fetchAll(_:)`.
+    func fetchAll(_ endpoint: PREndpoint, progress: @escaping FetchProgressHandler) async throws -> FetchBundle {
+        try await fetchAll(endpoint)
+    }
+
     /// Default: an inert "checking" status so lightweight test doubles do not
     /// need to implement health probing. `GitHubClient` overrides this.
     func dependencyStatus() async -> GitHubDependencyStatus {

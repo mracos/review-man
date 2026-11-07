@@ -55,7 +55,10 @@ public struct ReviewSessionLoader {
     /// Loads a qualified reference (full URL or `owner/repo#number`). Bare
     /// numbers are rejected: their resolution depends on the process current
     /// directory, which is unreliable for Finder-launched windows.
-    public func load(reference: String) async throws -> ReviewPresentation {
+    public func load(
+        reference: String,
+        progress: @escaping @Sendable (LoadProgress.Event) -> Void = { _ in }
+    ) async throws -> ReviewPresentation {
         AppLog.info("load", "Starting PR load for \(reference)")
         let startedAt = Date()
         let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -70,7 +73,9 @@ public struct ReviewSessionLoader {
         try await service.ensureAvailable()
         let endpoint = try await service.resolveEndpoint(from: trimmed)
         AppLog.info("load", "Resolved load reference to \(endpoint)")
-        let bundle = try await service.fetchAll(endpoint)
+        progress(.stage(.fetching))
+        let bundle = try await service.fetchAll(endpoint) { progress(.fetch($0)) }
+        progress(.stage(.preparing))
         AppLog.info("load", "Fetched PR bundle for \(endpoint); files=\(bundle.files.count); threads=\(bundle.threads.count)")
 
         let drafts = try await persistence.loadDrafts(for: endpoint, headSHA: bundle.pr.headRefOid)
