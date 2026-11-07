@@ -309,6 +309,25 @@ final class ReviewSessionStoreTests: XCTestCase {
         XCTAssertEqual(store.selection.filePath, store.review?.files.first?.path)
     }
 
+    func testHidingViewedFilesLeavesOnlyWhatIsLeftToReview() async {
+        let store = ReviewSessionStore(service: FakeService(), persistence: InMemoryPersistence())
+        store.openDemo()
+        await waitFor { store.state == .loaded }
+        let paths = store.review!.files.map(\.path)
+        store.toggleViewed(filePath: paths[0])
+
+        let viewed = store.review!.viewed
+
+        store.hideViewedFiles = true
+
+        XCTAssertEqual(store.filteredSidebarItems.map(\.path), paths.filter { !viewed.contains($0) })
+        store.sidebarSearch = paths[0]
+        XCTAssertTrue(store.filteredSidebarItems.isEmpty, "the search only looks among unviewed files")
+        store.sidebarSearch = ""
+        store.hideViewedFiles = false
+        XCTAssertEqual(store.filteredSidebarItems.map(\.path), paths)
+    }
+
     // MARK: - Row identity
 
     /// Closing a review window releases the store AND its rendered-line cache:
