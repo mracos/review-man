@@ -43,6 +43,27 @@ final class FileSidebarTreeTests: XCTestCase {
         XCTAssertEqual(views.children.map(\.name), ["FileSidebarView.swift", "ReviewWindowView.swift"])
     }
 
+    func testVisibleRowsSkipWhatIsInsideCollapsedFolders() {
+        let tree = FileSidebarTreeNode.build(from: [
+            item("README.md"),
+            item("Sources/App.swift"),
+            item("Sources/Views/ChangeCanvasView.swift"),
+            item("Tests/AppTests.swift")
+        ])
+
+        let expanded = FileSidebarTreeNode.visibleRows(of: tree, collapsed: [])
+        let collapsed = FileSidebarTreeNode.visibleRows(of: tree, collapsed: ["folder:Sources/Views", "folder:Tests"])
+
+        XCTAssertEqual(expanded.map(\.id), [
+            "folder:Sources", "folder:Sources/Views", "file:Sources/Views/ChangeCanvasView.swift",
+            "file:Sources/App.swift", "folder:Tests", "file:Tests/AppTests.swift", "file:README.md"
+        ])
+        XCTAssertEqual(expanded.map(\.depth), [0, 1, 2, 1, 0, 1, 0])
+        XCTAssertEqual(collapsed.map(\.id), [
+            "folder:Sources", "folder:Sources/Views", "file:Sources/App.swift", "folder:Tests", "file:README.md"
+        ])
+    }
+
     private func item(_ path: String) -> FileSidebarItem {
         FileSidebarItem(
             path: path,
