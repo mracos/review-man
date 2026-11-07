@@ -72,7 +72,11 @@ public struct FileSidebarView: View {
             }
 
             Section("Files") {
-                if fileTree.isEmpty {
+                if fileTree.isEmpty, store.hideViewedFiles, store.sidebarSearch.isEmpty {
+                    Label("Every file is viewed", systemImage: "checkmark.circle")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("sidebar-all-viewed")
+                } else if fileTree.isEmpty {
                     Label("No matching files", systemImage: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("sidebar-no-file-matches")
@@ -166,6 +170,17 @@ public struct FileSidebarView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Clear file filter")
             }
+
+            Button {
+                store.hideViewedFiles.toggle()
+            } label: {
+                Image(systemName: store.hideViewedFiles ? "eye.slash" : "eye")
+                    .foregroundStyle(store.hideViewedFiles ? Color.accentColor : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(store.hideViewedFiles ? "Show viewed files" : "Hide viewed files")
+            .accessibilityLabel(store.hideViewedFiles ? "Show viewed files" : "Hide viewed files")
+            .accessibilityIdentifier("sidebar-hide-viewed")
 
             BulkViewedMenu(store: store)
         }

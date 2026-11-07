@@ -32,6 +32,9 @@ public final class ReviewSessionStore: ObservableObject {
     @Published public var review: ReviewPresentation?
     @Published public var selection = ReviewSelection()
     @Published public var sidebarSearch = ""
+    /// Leaves viewed files out of the sidebar, so it lists what is left to
+    /// review. Kept for the window's next pull request.
+    @Published public var hideViewedFiles = false
     /// Files picked together in the sidebar with Shift or Command. Empty
     /// unless more than one is picked; any single selection clears it.
     @Published public var selectedFilePaths: Set<String> = []
@@ -243,8 +246,9 @@ public final class ReviewSessionStore: ObservableObject {
     public var filteredSidebarItems: [FileSidebarItem] {
         guard let review else { return [] }
         let query = sidebarSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return review.sidebarItems }
-        return review.sidebarItems.filter { item in
+        let items = hideViewedFiles ? review.sidebarItems.filter { !$0.isViewed } : review.sidebarItems
+        guard !query.isEmpty else { return items }
+        return items.filter { item in
             // Precomputed lowercase search text (path + status letter) avoids
             // re-lowercasing every path on every keystroke.
             item.searchable.contains(query)
