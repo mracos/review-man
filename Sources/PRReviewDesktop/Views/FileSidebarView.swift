@@ -42,24 +42,14 @@ public struct FileSidebarView: View {
             Divider()
 
             List(selection: Binding(
-            get: { showCanvas ? Self.canvasSelection : store.selection.filePath },
+            get: { sidebarSelection },
             set: { selection in
                 // `List` can invoke its selection binding while reconciling
                 // its own view update. Publishing state synchronously here
                 // causes SwiftUI's "Publishing changes from within view
                 // updates" loop, especially when switching Canvas → file.
                 // Defer the mutation one main-loop turn instead.
-                DispatchQueue.main.async {
-                    if selection == Self.canvasSelection {
-                        guard !showCanvas else { return }
-                        AppLog.info("selection", "Sidebar selected change canvas")
-                        showCanvas = true
-                    } else if let selection {
-                        AppLog.info("selection", "Sidebar selected file path=\(selection)")
-                        showCanvas = false
-                        store.select(filePath: selection)
-                    }
-                }
+                DispatchQueue.main.async { applySidebarSelection(selection) }
             }
         )) {
             Section("Review") {
@@ -128,6 +118,31 @@ public struct FileSidebarView: View {
         }
         .navigationTitle(showCanvas ? "Canvas" : "Files")
         .accessibilityIdentifier("file-sidebar")
+    }
+
+    /// Shift- and Command-click build a multi-selection that viewed marks act
+    /// on; a single row focuses that file (or the canvas) as before.
+    private var sidebarSelection: Set<String> {
+        if store.selectedFilePaths.count > 1 { return store.selectedFilePaths }
+        if showCanvas { return [Self.canvasSelection] }
+        return store.selection.filePath.map { [$0] } ?? []
+    }
+
+    private func applySidebarSelection(_ selection: Set<String>) {
+        let files = selection.subtracting([Self.canvasSelection])
+        if files.count > 1 {
+            AppLog.info("selection", "Sidebar selected files count=\(files.count)")
+            store.selectedFilePaths = files
+        } else if let path = files.first {
+            AppLog.info("selection", "Sidebar selected file path=\(path)")
+            showCanvas = false
+            store.select(filePath: path)
+        } else if selection.contains(Self.canvasSelection) {
+            store.selectedFilePaths = []
+            guard !showCanvas else { return }
+            AppLog.info("selection", "Sidebar selected change canvas")
+            showCanvas = true
+        }
     }
 
     private var fileFilter: some View {
@@ -326,6 +341,17 @@ private struct SidebarFileItemRow: View {
         }
         .padding(.vertical, 1)
         .contextMenu {
+            if store.selectedFilePaths.count > 1, store.selectedFilePaths.contains(item.path) {
+                let scope = BulkViewedScope.paths(Array(store.selectedFilePaths))
+                let unviewed = store.viewedChangeCount(scope, viewed: true)
+                if unviewed > 0 {
+                    Button("Mark \(unviewed) Selected Files Viewed" as String) { store.setViewed(scope, viewed: true) }
+                }
+                if unviewed < store.selectedFilePaths.count {
+                    Button("Mark Selected Files Unviewed" as String) { store.setViewed(scope, viewed: false) }
+                }
+                Divider()
+            }
             Button(item.isViewed ? "Mark Unviewed" : "Mark Viewed") {
                 store.toggleViewed(filePath: item.path)
             }

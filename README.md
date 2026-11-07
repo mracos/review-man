@@ -42,7 +42,8 @@ separate windows and no duplicates for the same repository + PR.
 - **File sidebar** with an inline filter, expandable folder tree, status
   letters, ± counts, comment badges, and locally-persisted viewed marks.
   Press Cmd-F to focus the filter, Cmd-Option-Left to collapse folders, or
-  Cmd-Option-Right to expand them.
+  Cmd-Option-Right to expand them. Shift-click or Cmd-click files to select
+  several: Toggle Viewed and the row menu then act on the whole selection.
 - **Inbox**: the sidebar's Inbox tab lists pull requests across all your repositories in collapsible sections: waiting for your review, your open PRs, all your PRs, and an optional Team section (open PRs in organizations you choose). The filter menu switches sections on and off, groups by repository (each group folds), switches repositories on and off, and narrows every section to PRs with chosen labels; rows show their labels in GitHub colors. It refreshes every 5 minutes, when the filter changes, or on demand; choosing a PR opens it in the window.
 - **`gh` onboarding**: the app discovers `gh` from your PATH, Apple Silicon
   Homebrew, or MacPorts (or a user-selected executable) and shows actionable

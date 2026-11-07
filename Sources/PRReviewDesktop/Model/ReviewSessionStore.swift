@@ -32,6 +32,9 @@ public final class ReviewSessionStore: ObservableObject {
     @Published public var review: ReviewPresentation?
     @Published public var selection = ReviewSelection()
     @Published public var sidebarSearch = ""
+    /// Files picked together in the sidebar with Shift or Command. Empty
+    /// unless more than one is picked; any single selection clears it.
+    @Published public var selectedFilePaths: Set<String> = []
     @Published public var banner: SessionBanner?
     @Published public var isBusy = false
     @Published public var persistenceFailure: PersistenceFailure?
@@ -153,6 +156,7 @@ public final class ReviewSessionStore: ObservableObject {
         let generation = loadGeneration
         loadTask?.cancel()
 
+        selectedFilePaths = []
         // A new review invalidates everything derived from the previous one:
         // rendered lines, navigation indexes, and per-file lookups. The old
         // cache contents would only pin memory for lines that can never be
@@ -213,6 +217,7 @@ public final class ReviewSessionStore: ObservableObject {
     /// Applies a sidebar selection, retaining it if the file still exists.
     public func select(filePath: String?) {
         let previousPath = selection.filePath
+        selectedFilePaths = []
         if let path = filePath, let review,
            review.fileIndexByPath[path] != nil {
             selection.filePath = path

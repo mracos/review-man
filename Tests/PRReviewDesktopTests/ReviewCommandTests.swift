@@ -185,6 +185,48 @@ final class ReviewCommandTests: XCTestCase {
     }
 
     @MainActor
+    func testToggleViewedActsOnTheWholeSidebarSelection() {
+        let store = makeLoadedStore(diff: twoMarkdownFilesDiff)
+        store.toggleViewed(filePath: "README.md")
+        store.selectedFilePaths = ["README.md", "NOTES.md"]
+
+        store.toggleViewedForSelection()
+        XCTAssertEqual(store.review?.viewed, ["README.md", "NOTES.md"], "a mixed selection is marked viewed")
+
+        store.toggleViewedForSelection()
+        XCTAssertEqual(store.review?.viewed, [], "a fully viewed selection is unmarked")
+    }
+
+    @MainActor
+    func testSingleSelectionClearsTheMultiSelection() {
+        let store = makeLoadedStore(diff: twoMarkdownFilesDiff)
+        store.selectedFilePaths = ["README.md", "NOTES.md"]
+
+        store.select(filePath: "README.md")
+        store.toggleViewedForSelection()
+
+        XCTAssertEqual(store.selectedFilePaths, [])
+        XCTAssertEqual(store.review?.viewed, ["README.md"])
+    }
+
+    private var twoMarkdownFilesDiff: String {
+        """
+        diff --git a/README.md b/README.md
+        --- a/README.md
+        +++ b/README.md
+        @@ -1,1 +1,2 @@
+         # Title
+        +New line
+        diff --git a/NOTES.md b/NOTES.md
+        --- a/NOTES.md
+        +++ b/NOTES.md
+        @@ -1,1 +1,2 @@
+         # Notes
+        +Another line
+        """
+    }
+
+    @MainActor
     private func makeLoadedStore(diff: String? = nil) -> ReviewSessionStore {
         let service = FakeService()
         service.bundle = FetchBundle(
