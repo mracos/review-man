@@ -18,6 +18,10 @@ public struct ReviewWindowView: View {
     /// Which overview `showCanvas` reveals: the spatial canvas or every diff
     /// stacked in one scroll.
     @AppStorage(OverviewMode.key) private var overviewModeRaw = OverviewMode.canvas.rawValue
+    /// The canvas is built the first time it shows rather than with every
+    /// load: on a big pull request it is the slowest view to build, and a
+    /// reviewer opening into the list or a file may never look at it.
+    @State private var canvasMounted = false
     @State private var canvasZoom = ChangeCanvasView.defaultZoom
     @State private var diffPresentation: DiffPresentation = .unified
     @State private var showCloseWarning = false
@@ -74,6 +78,14 @@ public struct ReviewWindowView: View {
             }
             if store.requestFocus != .none { store.requestFocus = .none }
         }
+        .onChange(of: store.state) { [previous = store.state] state in
+            if case .loading = previous, state == .loaded || state == .empty {
+                applyOpeningPreferences()
+            }
+        }
+        .onChange(of: canvasVisible) { visible in
+            if visible { canvasMounted = true }
+        }
         .onChange(of: showCanvas) { showingCanvas in
             guard !showingCanvas, let file = store.selectedFile else { return }
             // Start the render interval when the focused diff actually becomes
@@ -128,6 +140,21 @@ public struct ReviewWindowView: View {
     private func matches(_ note: Notification) -> Bool {
         guard let object = note.object as? ReviewSessionStore else { return true }
         return object === store
+    }
+
+    private func applyOpeningPreferences() {
+        let preferences = OpeningPreferences()
+        let overview = preferences.overview(lastUsed: overviewMode)
+        if let overview { overviewModeRaw = overview.rawValue }
+        showCanvas = overview != nil
+        canvasMounted = overview == .canvas
+        diffPresentation = preferences.diffLayout
+        switch preferences.sidebar {
+        case .unchanged:
+            break
+        case .files:
+            sidebarVisible = true
+        }
     }
 
     private var overviewMode: OverviewMode {
@@ -385,7 +412,9 @@ public struct ReviewWindowView: View {
                     // Its internal expansion, keyboard-focus, and scroll
                     // state then survive switching between the two modes.
                     ZStack {
-                        if SwiftFlowCanvasSpike.isEnabled {
+                        if !canvasMounted {
+                            EmptyView()
+                        } else if SwiftFlowCanvasSpike.isEnabled {
                             SwiftFlowCanvasSpikeView(
                                 store: store,
                                 files: review.files,
