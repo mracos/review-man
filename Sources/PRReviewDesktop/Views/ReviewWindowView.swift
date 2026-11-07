@@ -241,7 +241,7 @@ public struct ReviewWindowView: View {
                 .help("Comment on the selected line")
                 .accessibilityIdentifier("toolbar-comment")
                 Button {
-                    store.toggleViewed(filePath: store.selection.filePath ?? "")
+                    store.toggleViewedForSelection()
                 } label: {
                     Label("Toggle Viewed", systemImage: "checkmark.circle")
                 }
@@ -583,9 +583,7 @@ private struct CommandRoutingModifier: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .reviewToggleViewedRequest)) { note in
                 guard matches(note) else { return }
-                if let path = store.selection.filePath {
-                    store.toggleViewed(filePath: path)
-                }
+                store.toggleViewedForSelection()
             }
             .onReceive(NotificationCenter.default.publisher(for: .reviewSubmitRequest)) { note in
                 guard matches(note) else { return }

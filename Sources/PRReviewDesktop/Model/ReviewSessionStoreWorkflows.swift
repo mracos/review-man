@@ -386,6 +386,25 @@ public extension ReviewSessionStore {
         pushViewedToGitHub(path: filePath, viewed: viewed.contains(filePath))
     }
 
+    /// What Toggle Viewed acts on: the sidebar's multi-selection, else the
+    /// focused file.
+    var viewedTargetPaths: [String] {
+        if selectedFilePaths.count > 1 { return selectedFilePaths.sorted() }
+        return selection.filePath.map { [$0] } ?? []
+    }
+
+    /// Like GitHub's checkbox on a mixed selection: marks every target viewed
+    /// unless all of them already are, then unmarks them all.
+    func toggleViewedForSelection() {
+        let targets = viewedTargetPaths
+        guard targets.count > 1 else {
+            if let path = targets.first { toggleViewed(filePath: path) }
+            return
+        }
+        let allViewed = targets.allSatisfy { review?.viewed.contains($0) == true }
+        setViewed(.paths(targets), viewed: !allViewed)
+    }
+
     func viewedChangeCount(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
         guard let review else { return 0 }
         return scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }.count
@@ -918,6 +937,14 @@ public extension ReviewSessionStore {
     /// Marks the selected file viewed (never un-marks it) and moves to the
     /// next unviewed file; stays put once every file is viewed.
     func markViewedAndAdvance() {
+        if selectedFilePaths.count > 1 {
+            let targets = viewedTargetPaths
+            if targets.contains(where: { review?.viewed.contains($0) == false }) {
+                setViewed(.paths(targets), viewed: true)
+            }
+            selectAdjacentUnviewedFile(1)
+            return
+        }
         guard let path = selection.filePath ?? review?.files.first?.path else { return }
         if review?.viewed.contains(path) == false {
             toggleViewed(filePath: path)

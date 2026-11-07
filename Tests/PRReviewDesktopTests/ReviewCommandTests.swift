@@ -242,6 +242,45 @@ final class ReviewCommandTests: XCTestCase {
         XCTAssertEqual(store.review?.viewed, [])
     }
 
+    @MainActor
+    func testToggleViewedActsOnTheWholeSidebarSelection() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        store.toggleViewed(filePath: "README.md")
+        store.selectedFilePaths = ["README.md", "NOTES.md"]
+
+        store.toggleViewedForSelection()
+        XCTAssertEqual(store.review?.viewed, ["README.md", "NOTES.md"], "a mixed selection is marked viewed")
+
+        store.toggleViewedForSelection()
+        XCTAssertEqual(store.review?.viewed, [], "a fully viewed selection is unmarked")
+    }
+
+    @MainActor
+    func testSingleSelectionClearsTheMultiSelection() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        store.selectedFilePaths = ["README.md", "NOTES.md"]
+
+        store.select(filePath: "README.md")
+        store.toggleViewedForSelection()
+
+        XCTAssertEqual(store.selectedFilePaths, [])
+        XCTAssertEqual(store.review?.viewed, ["README.md"])
+    }
+
+    @MainActor
+    func testMarkViewedAndAdvanceMarksTheSelectionThenMovesOn() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        let paths = store.review?.files.map(\.path) ?? []
+        store.select(filePath: paths[0])
+        store.selectedFilePaths = [paths[0], paths[1]]
+
+        store.markViewedAndAdvance()
+
+        XCTAssertEqual(store.review?.viewed, [paths[0], paths[1]])
+        XCTAssertEqual(store.selection.filePath, paths[2])
+        XCTAssertEqual(store.selectedFilePaths, [])
+    }
+
     private var threeFileDiff: String {
         sampleDiff + """
 

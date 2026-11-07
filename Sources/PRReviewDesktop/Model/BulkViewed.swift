@@ -10,7 +10,12 @@ public enum BulkViewedScope: Equatable {
     case paths([String])
 
     public func paths(in items: [FileSidebarItem]) -> [String] {
-        items.filter(matches).map(\.path)
+        if case .paths(let paths) = self {
+            // A sidebar selection can hold thousands of paths.
+            let wanted = Set(paths)
+            return items.lazy.map(\.path).filter(wanted.contains)
+        }
+        return items.filter(matches).map(\.path)
     }
 
     private func matches(_ item: FileSidebarItem) -> Bool {
