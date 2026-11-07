@@ -180,6 +180,8 @@ open "build/PR Review.app" --args --demo --demo-files 500 --demo-lines 60000
 - **Replies are sent immediately** (GitHub's reply API has no pending-review
   batching). Only top-level comments are submitted as one review.
 - **Viewed marks are local by default** (per head SHA). Settings > GitHub > "Sync viewed files with GitHub" mirrors them to GitHub's own viewed state: files viewed on github.com load as viewed, and marking a file here marks it there.
+- **What a pull request opens into** is set in Settings > General: the pane (last used overview, canvas, list or first file), the diff layout, and whether the sidebar opens on the inbox or the files. On very big pull requests the list or a file opens faster: the canvas is only built once it shows.
+- **Big pull requests** show their progress while loading: size, files fetched page by page once GitHub refuses the single diff (over 300 files), and a note when GitHub leaves files out (it lists at most 3,000, and some diffs are too large to show).
 - **LEFT-side comments** use old-file line numbers; **RIGHT-side** use new-file
   line numbers, exactly as the GitHub API requires.
 - **Orphaned drafts**: when a head changes and a draft's line disappears, the
