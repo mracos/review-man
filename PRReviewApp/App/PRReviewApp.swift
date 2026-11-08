@@ -13,7 +13,10 @@ struct PRReviewApp: App {
     var body: some Scene {
         WindowGroup("PR Review", for: String.self) { $key in
             ReviewWindowView(store: coordinator.store(for: key), inbox: coordinator.inbox)
-                .task { coordinator.startInbox() }
+                .task {
+                    coordinator.registerServices()
+                    coordinator.startInbox()
+                }
                 .background(OpenWindowProxy())
                 .environmentObject(coordinator)
                 .onOpenURL { url in
@@ -59,6 +62,17 @@ final class AppCoordinator: ObservableObject {
     let inbox = InboxStore(service: GitHubClient(
         resolver: GitHubExecutableResolver(overrideURL: GitHubExecutablePreference().selectedExecutableURL)
     ))
+
+    private var pullRequestService: PullRequestService?
+
+    /// Hands the Services menu entry its provider; once is enough.
+    func registerServices() {
+        guard pullRequestService == nil else { return }
+        let service = PullRequestService { [weak self] url in self?.handle(url: url) }
+        pullRequestService = service
+        NSApplication.shared.servicesProvider = service
+        NSUpdateDynamicServices()
+    }
 
     /// Starts inbox polling, except in offline demo launches.
     func startInbox() {
