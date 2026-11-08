@@ -520,6 +520,7 @@ private final class AppKitDiffSurfaceNSView: NSView {
     private var accessibilityRows: [DiffRowID: AppKitDiffAccessibilityRow] = [:]
     private var hoveredRowID: DiffRowID?
     private var textSelection: DiffTextSelection?
+    private var renderedFindMatch: DiffFindMatch?
     private var trackingArea: NSTrackingArea?
     private var boundsObserver: NSObjectProtocol?
     private var isUpdatingHostedRows = false
@@ -568,6 +569,15 @@ private final class AppKitDiffSurfaceNSView: NSView {
         }
         self.snapshot = snapshot.applyingRowHeightOverrides(rowHeightOverrides)
         self.renderedSelection = store.selection.rowID
+        if store.findMatch != renderedFindMatch {
+            renderedFindMatch = store.findMatch
+            if let match = store.findMatch, let index = snapshot.layout.rowIndex(for: match.rowID) {
+                textSelection = DiffTextSelection(
+                    anchor: .init(row: index, offset: match.range.lowerBound),
+                    head: .init(row: index, offset: match.range.upperBound)
+                )
+            }
+        }
         textCache.invalidate()
         updateFrameSize(viewportWidth: bounds.width)
         updateHostedRows()

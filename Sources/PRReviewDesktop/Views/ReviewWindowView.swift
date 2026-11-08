@@ -90,6 +90,10 @@ public struct ReviewWindowView: View {
             }
             if store.requestFocus != .none { store.requestFocus = .none }
         }
+        .onChange(of: store.isFinding) { finding in
+            // Find searches the open file, so leave the canvas for it.
+            if finding, showCanvas, store.selectedFile != nil { showCanvas = false }
+        }
         .onChange(of: store.state) { [previous = store.state] state in
             // The sheet would otherwise cover the loading screen and its progress.
             if case .loading = state { showOpenSheet = false }
@@ -510,6 +514,10 @@ public struct ReviewWindowView: View {
                             VStack(spacing: 0) {
                                 FocusedFileBar(store: store, file: file)
                                 Divider()
+                                if store.isFinding {
+                                    FindBar(store: store)
+                                    Divider()
+                                }
                                 DiffView(store: store, file: file, presentation: $diffPresentation)
                             }
                         } else if !showCanvas {

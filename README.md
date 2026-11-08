@@ -39,9 +39,12 @@ separate windows and no duplicates for the same repository + PR.
 - **Review**: comment, approve, or request changes with a summary; orphaned
   drafts (whose anchor left the diff) are excluded from submission and
   reattach automatically when their line returns.
+- **Find in file**: Cmd-F searches the open diff's code; Return or Cmd-G
+  moves to the next match, Shift-Return or Shift-Cmd-G to the previous, and
+  the match is selected, so Cmd-C copies it. Drag across code to select it.
 - **File sidebar** with an inline filter, expandable folder tree, status
   letters, ± counts, comment badges, and locally-persisted viewed marks.
-  Press Cmd-F to focus the filter, Cmd-Option-Left to collapse folders, or
+  Press Cmd-Option-F to focus the filter, Cmd-Option-Left to collapse folders, or
   Cmd-Option-Right to expand them. Shift-click or Cmd-click files to select
   several: Toggle Viewed, "Viewed & Next" and the row menu then act on the
   whole selection. The eye button next to the filter hides viewed files, so

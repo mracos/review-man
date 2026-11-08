@@ -63,6 +63,10 @@ public final class ReviewSessionStore: ObservableObject {
     /// in demo mode, or when the permission query failed.
     @Published public var actionState: PRActionState?
     @Published public var runningAction: PRAction?
+    // Find in the open file.
+    @Published public var isFinding = false
+    @Published public internal(set) var findQuery = ""
+    @Published public internal(set) var findMatch: DiffFindMatch?
 
     /// The single hovered diff row, observed ONLY by diff-row views. Keeping
     /// hover outside the store's own @Published surface stops constant mouse
