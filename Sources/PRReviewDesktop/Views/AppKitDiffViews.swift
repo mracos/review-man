@@ -219,7 +219,8 @@ private enum AppKitDiffRowRenderer {
         palette: AppKitDiffPalette,
         appearanceKey: String,
         selected: Bool = false,
-        hovered: Bool = false
+        hovered: Bool = false,
+        textSelection: Range<Int>? = nil
     ) {
         switch row.row {
         case .hunkHeader(let hunkIndex):
@@ -262,7 +263,7 @@ private enum AppKitDiffRowRenderer {
                 rect.fill()
             }
 
-            let gutterWidth = CGFloat(file.gutterDigits * 2 + 3) * gutterCharacterWidth + 14
+            let gutterWidth = Self.gutterWidth(file: file, characterWidth: gutterCharacterWidth)
             palette.gutterBackground.withAlphaComponent(0.5).setFill()
             NSRect(x: rect.minX, y: rect.minY, width: gutterWidth, height: rect.height).fill()
             drawText(
@@ -279,9 +280,16 @@ private enum AppKitDiffRowRenderer {
                 palette: palette,
                 appearanceKey: appearanceKey
             )
+            let textX = rect.minX + gutterWidth + 8
+            if let textSelection, !textSelection.isEmpty {
+                let from = textX + Self.width(of: line.content, upTo: textSelection.lowerBound, font: gutterFont)
+                let to = textX + Self.width(of: line.content, upTo: textSelection.upperBound, font: gutterFont)
+                NSColor.selectedTextBackgroundColor.setFill()
+                NSRect(x: from, y: rect.minY, width: to - from, height: rect.height).fill()
+            }
             text.draw(
                 with: NSRect(
-                    x: rect.minX + gutterWidth + 8,
+                    x: textX,
                     y: rect.minY + 2,
                     width: max(0, rect.width - gutterWidth - 16),
                     height: rect.height - 4
@@ -299,6 +307,34 @@ private enum AppKitDiffRowRenderer {
         case .empty:
             drawMarkerRow("No changes", in: rect, color: palette.comment)
         }
+    }
+
+    static func gutterWidth(file: DiffFile, characterWidth: CGFloat) -> CGFloat {
+        CGFloat(file.gutterDigits * 2 + 3) * characterWidth + 14
+    }
+
+    /// Drawn width of the code's first `offset` UTF-16 units, measured rather
+    /// than counted so tabs land where they are drawn.
+    static func width(of content: String, upTo offset: Int, font: NSFont) -> CGFloat {
+        let code = content as NSString
+        let prefix = code.substring(to: min(max(0, offset), code.length))
+        return NSAttributedString(string: prefix, attributes: [.font: font]).size().width
+    }
+
+    /// The UTF-16 offset nearest to `x` in the code, `x` measured from the
+    /// code's left edge.
+    static func offset(in content: String, atX x: CGFloat, font: NSFont) -> Int {
+        var low = 0
+        var high = (content as NSString).length
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if width(of: content, upTo: mid, font: font) <= x { low = mid } else { high = mid - 1 }
+        }
+        let length = (content as NSString).length
+        guard low < length else { return low }
+        let left = width(of: content, upTo: low, font: font)
+        let right = width(of: content, upTo: low + 1, font: font)
+        return x - left > right - x ? low + 1 : low
     }
 
     private static func drawMarkerRow(_ text: String, in rect: NSRect, color: NSColor) {
@@ -467,6 +503,7 @@ private final class AppKitDiffSurfaceNSView: NSView {
     private var hostedRows: [DiffRowID: NSHostingView<AppKitDiffCommentOverlayView>] = [:]
     private var accessibilityRows: [DiffRowID: AppKitDiffAccessibilityRow] = [:]
     private var hoveredRowID: DiffRowID?
+    private var textSelection: DiffTextSelection?
     private var trackingArea: NSTrackingArea?
     private var boundsObserver: NSObjectProtocol?
     private var isUpdatingHostedRows = false
@@ -497,6 +534,9 @@ private final class AppKitDiffSurfaceNSView: NSView {
     func reload(store: ReviewSessionStore, snapshot: AppKitDiffRenderSnapshot) {
         let selectionChanged = renderedSelection != store.selection.rowID
         let fileChanged = baseSnapshot.file.path != snapshot.file.path
+        if fileChanged || baseSnapshot.rows.count != snapshot.rows.count {
+            textSelection = nil
+        }
         self.store = store
         baseSnapshot = snapshot
         if fileChanged {
@@ -597,11 +637,62 @@ private final class AppKitDiffSurfaceNSView: NSView {
             )
             return
         }
+        let point = convert(event.locationInWindow, from: nil)
+        if !event.modifierFlags.contains(.shift), let position = textPosition(at: point) {
+            textSelection = DiffTextSelection(anchor: position, head: position)
+            needsDisplay = true
+        }
         guard let hit = lineHit(at: event) else { return }
         selectLine(
             hunkIndex: hit.hunkIndex,
             lineIndex: hit.lineIndex,
             extending: event.modifierFlags.contains(.shift)
+        )
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        autoscroll(with: event)
+        guard var selection = textSelection,
+              let position = textPosition(at: convert(event.locationInWindow, from: nil)),
+              position != selection.head else { return }
+        selection.head = position
+        textSelection = selection
+        needsDisplay = true
+    }
+
+    @objc func copy(_ sender: Any?) {
+        guard let textSelection, !textSelection.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textSelection.text(rows: snapshot.rows, file: snapshot.file), forType: .string)
+    }
+
+    /// Where a point falls in the code: past the last row it clamps to the
+    /// end, and on a non-code row (hunk header, comment) to that row's start.
+    private func textPosition(at point: NSPoint) -> DiffTextSelection.Position? {
+        guard !snapshot.rows.isEmpty else { return nil }
+        let index: Int
+        if let positioned = snapshot.layout.row(atY: point.y), let found = snapshot.layout.rowIndex(for: positioned.id) {
+            index = found
+        } else if point.y > 0 {
+            index = snapshot.rows.count - 1
+        } else {
+            return DiffTextSelection.Position(row: 0, offset: 0)
+        }
+        guard case .line(let hunk, let lineIndex) = snapshot.rows[index].row,
+              let content = snapshot.file.line(at: hunk, lineIndex)?.content else {
+            return DiffTextSelection.Position(row: index, offset: 0)
+        }
+        let textX = AppKitDiffRowRenderer.gutterWidth(
+            file: snapshot.file,
+            characterWidth: snapshot.layout.metrics.characterWidth
+        ) + 8
+        let font = AppKitDiffRowRenderer.gutterFont
+        return DiffTextSelection.Position(
+            row: index,
+            offset: AppKitDiffRowRenderer.offset(in: content, atX: point.x - textX, font: font)
         )
     }
 
@@ -1042,9 +1133,16 @@ private final class AppKitDiffSurfaceNSView: NSView {
                 palette: palette,
                 appearanceKey: appearance.key,
                 selected: store?.selection.rowID == positioned.id,
-                hovered: hoveredRowID == positioned.id
+                hovered: hoveredRowID == positioned.id,
+                textSelection: selectedRange(inRow: index, positioned.row)
             )
         }
+    }
+
+    private func selectedRange(inRow index: Int, _ row: DiffDisplayRow) -> Range<Int>? {
+        guard let textSelection, case .line(let hunk, let lineIndex) = row.row,
+              let content = snapshot.file.line(at: hunk, lineIndex)?.content else { return nil }
+        return textSelection.range(inRow: index, length: (content as NSString).length)
     }
 
     private func updateFrameSize(viewportWidth: CGFloat) {
