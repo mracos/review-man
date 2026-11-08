@@ -116,7 +116,7 @@ public struct ReviewWindowView: View {
                 Text("Open Pull Request")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
-                OpenPullRequestForm(store: store, reference: $sheetReference)
+                OpenPullRequestForm(store: store, reference: $sheetReference) { showOpenSheet = false }
                     .frame(maxWidth: 420)
                 Button("Close") { showOpenSheet = false }
                     .keyboardShortcut(.cancelAction)

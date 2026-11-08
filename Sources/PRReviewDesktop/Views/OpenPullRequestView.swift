@@ -5,10 +5,14 @@ import SwiftUI
 public struct OpenPullRequestForm: View {
     @ObservedObject public var store: ReviewSessionStore
     @Binding public var reference: String
+    /// Runs as an open starts, so a sheet holding the form can close and
+    /// uncover the loading screen.
+    private let onOpen: () -> Void
 
-    public init(store: ReviewSessionStore, reference: Binding<String>) {
+    public init(store: ReviewSessionStore, reference: Binding<String>, onOpen: @escaping () -> Void = {}) {
         self.store = store
         self._reference = reference
+        self.onOpen = onOpen
     }
 
     public var body: some View {
@@ -23,7 +27,10 @@ public struct OpenPullRequestForm: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("open-pr-button")
-                Button("Open demo") { store.openDemo() }
+                Button("Open demo") {
+                    onOpen()
+                    store.openDemo()
+                }
                     .accessibilityIdentifier("open-demo-button")
             }
 
@@ -44,6 +51,7 @@ public struct OpenPullRequestForm: View {
     private func open() {
         let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        onOpen()
         store.open(reference: trimmed)
     }
 }
