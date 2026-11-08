@@ -65,7 +65,7 @@ final class InboxStoreTests: XCTestCase {
 
         await inbox.refresh()
 
-        XCTAssertEqual(inbox.sections, [.reviewRequested, .myOpen, .mine])
+        XCTAssertEqual(inbox.sections, [.reviewRequested, .myOpen], "merged and closed PRs stay out unless asked for")
         XCTAssertTrue(inbox.groupByRepository)
         XCTAssertEqual(inbox.rows(for: .reviewRequested).map(\.number), [1])
         XCTAssertEqual(inbox.rows(for: .myOpen).map(\.number), [2])
@@ -79,7 +79,7 @@ final class InboxStoreTests: XCTestCase {
 
         await inbox.refresh()
 
-        XCTAssertEqual(inbox.sections, [.reviewRequested, .myOpen, .mine, .team])
+        XCTAssertEqual(inbox.sections, [.reviewRequested, .myOpen, .team])
         XCTAssertTrue(inbox.needsSetup(.team))
         XCTAssertFalse(service.queries.contains { $0.contains("org:") })
     }
@@ -102,7 +102,8 @@ final class InboxStoreTests: XCTestCase {
         let inbox = makeStore(service)
         inbox.hideRepository("acme/legacy")
         inbox.toggleLabel("agentic-workflows")
-        inbox.setSection(.mine, enabled: false)
+        inbox.setSection(.myOpen, enabled: false)
+        inbox.setSection(.recentlyClosed, enabled: true)
         inbox.setGroupByRepository(false)
 
         await inbox.refresh()
@@ -110,7 +111,7 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertTrue(service.queries.allSatisfy { $0.contains("-repo:acme/legacy") && $0.contains("label:\"agentic-workflows\"") })
         let reopened = makeStore(InboxService())
         XCTAssertEqual(reopened.filter, InboxFilter(labels: ["agentic-workflows"], hiddenRepositories: ["acme/legacy"]))
-        XCTAssertEqual(reopened.sections, [.reviewRequested, .myOpen])
+        XCTAssertEqual(reopened.sections, [.reviewRequested, .recentlyClosed])
         XCTAssertFalse(reopened.groupByRepository)
     }
 
@@ -177,13 +178,13 @@ final class InboxStoreTests: XCTestCase {
 
     func testCollapsedSectionsSurviveANewStore() {
         let inbox = makeStore(InboxService())
-        inbox.toggleCollapsed(.mine)
+        inbox.toggleCollapsed(.myOpen)
         inbox.toggleCollapsed(.team)
         inbox.toggleCollapsed(.team)
 
         let reopened = makeStore(InboxService())
 
-        XCTAssertTrue(reopened.isCollapsed(.mine))
+        XCTAssertTrue(reopened.isCollapsed(.myOpen))
         XCTAssertFalse(reopened.isCollapsed(.team))
     }
 

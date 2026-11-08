@@ -15,8 +15,8 @@ final class InboxTests: XCTestCase {
             "is:pr is:open archived:false author:@me sort:updated-desc"
         )
         XCTAssertEqual(
-            InboxSection.mine.searchQuery(filter: filter),
-            "is:pr archived:false author:@me sort:updated-desc"
+            InboxSection.recentlyClosed.searchQuery(filter: filter),
+            "is:pr is:closed archived:false author:@me sort:updated-desc"
         )
     }
 
