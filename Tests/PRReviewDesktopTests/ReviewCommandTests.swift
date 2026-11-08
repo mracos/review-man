@@ -281,6 +281,78 @@ final class ReviewCommandTests: XCTestCase {
         XCTAssertEqual(store.selectedFilePaths, [])
     }
 
+    @MainActor
+    func testRegexFilterMatchesPathsOrChangedLines() {
+        let store = makeLoadedStore(diff: importRewriteDiff)
+
+        store.sidebarSearchMode = .pathRegex
+        store.sidebarSearch = #"^src/.*\.js$"#
+        XCTAssertEqual(store.filteredSidebarItems.map(\.path), ["src/a.js", "src/b.js"])
+
+        store.sidebarSearchMode = .changedLines
+        store.sidebarSearch = "extra\\("
+        XCTAssertEqual(store.filteredSidebarItems.map(\.path), ["src/c.ts"])
+
+        store.sidebarSearch = "context only"
+        XCTAssertEqual(store.filteredSidebarItems, [], "context lines are not searched")
+    }
+
+    @MainActor
+    func testInvalidRegexShowsNothingAndSaysSo() {
+        let store = makeLoadedStore(diff: importRewriteDiff)
+
+        store.sidebarSearchMode = .changedLines
+        store.sidebarSearch = "import ("
+
+        XCTAssertTrue(store.sidebarSearchIsInvalid)
+        XCTAssertEqual(store.filteredSidebarItems, [])
+        store.sidebarSearchMode = .paths
+        XCTAssertFalse(store.sidebarSearchIsInvalid)
+    }
+
+    @MainActor
+    func testFilesWithTheSameOrASimilarChangeAreMarkedTogether() {
+        let store = makeLoadedStore(diff: importRewriteDiff)
+
+        XCTAssertEqual(store.filesWithSameChange(as: "src/a.js"), ["src/a.js", "src/b.js"])
+        store.markSimilarChangeViewed(to: "src/a.js")
+        XCTAssertEqual(store.review?.viewed, ["src/a.js", "src/b.js", "src/c.ts"])
+
+        store.markSimilarChangeViewed(to: "README.md")
+        XCTAssertEqual(store.banner?.text, "No other file has a similar change.")
+    }
+
+    private var importRewriteDiff: String {
+        """
+        diff --git a/src/a.js b/src/a.js
+        --- a/src/a.js
+        +++ b/src/a.js
+        @@ -1,2 +1,2 @@
+         context only
+        -import x from 'old'
+        +import x from 'new'
+        diff --git a/src/b.js b/src/b.js
+        --- a/src/b.js
+        +++ b/src/b.js
+        @@ -1,1 +1,1 @@
+        -import x from 'old'
+        +import x from 'new'
+        diff --git a/src/c.ts b/src/c.ts
+        --- a/src/c.ts
+        +++ b/src/c.ts
+        @@ -1,1 +1,2 @@
+        -import x from 'old'
+        +import x from 'new'
+        +extra()
+        diff --git a/README.md b/README.md
+        --- a/README.md
+        +++ b/README.md
+        @@ -1,1 +1,2 @@
+         # Title
+        +New line
+        """
+    }
+
     private var threeFileDiff: String {
         sampleDiff + """
 

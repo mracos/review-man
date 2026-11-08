@@ -405,6 +405,76 @@ public extension ReviewSessionStore {
         setViewed(.paths(targets), viewed: !allViewed)
     }
 
+    /// Files whose change is identical to `path`'s, itself included; cheap
+    /// enough for a context menu on every row.
+    func filesWithSameChange(as path: String) -> [String] {
+        _ = changeSignatures()
+        return sameChangePaths[path] ?? []
+    }
+
+    /// Files whose change shares most of its lines with `path`'s; compares
+    /// against every file, so only run it when asked.
+    func filesWithSimilarChange(to path: String) -> [String] {
+        ChangeSimilarity.paths(similarTo: path, minimum: ChangeSimilarity.similarThreshold, signatures: changeSignatures())
+    }
+
+    private func changeSignatures() -> [(path: String, signature: Set<String>)] {
+        if let changeSignatureCache { return changeSignatureCache }
+        let signatures = (review?.files ?? []).compactMap { file in
+            ChangeSimilarity.signature(of: file).map { (path: file.path, signature: $0) }
+        }
+        changeSignatureCache = signatures
+        for group in Dictionary(grouping: signatures, by: \.signature).values {
+            let paths = group.map(\.path)
+            for path in paths { sameChangePaths[path] = paths }
+        }
+        return signatures
+    }
+
+    /// Marks every file whose change resembles `path`'s viewed, saying so when
+    /// no other file does.
+    func markSimilarChangeViewed(to path: String) {
+        let similar = filesWithSimilarChange(to: path)
+        guard similar.count > 1 else {
+            banner = SessionBanner(text: "No other file has a similar change.")
+            return
+        }
+        setViewed(.paths(similar), viewed: true)
+    }
+
+    /// Whether the sidebar filter is a regex that does not compile.
+    var sidebarSearchIsInvalid: Bool {
+        let query = sidebarSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sidebarSearchMode.isRegex && !query.isEmpty && regexFilterMatches(query) == nil
+    }
+
+    /// Paths the regex filter matches, nil when it does not compile.
+    func regexFilterMatches(_ pattern: String) -> Set<String>? {
+        if let cached = regexFilterCache, cached.pattern == pattern, cached.mode == sidebarSearchMode {
+            return cached.paths
+        }
+        let paths = Self.regexMatches(pattern, mode: sidebarSearchMode, in: review?.files ?? [])
+        regexFilterCache = (pattern, sidebarSearchMode, paths)
+        return paths
+    }
+
+    private static func regexMatches(_ pattern: String, mode: SidebarSearchMode, in files: [DiffFile]) -> Set<String>? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        func matches(_ text: String) -> Bool {
+            regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        }
+        return Set(files.filter { file in
+            switch mode {
+            case .paths, .pathRegex:
+                return matches(file.path)
+            case .changedLines:
+                return file.hunks.contains { hunk in
+                    hunk.lines.contains { $0.kind != .context && matches($0.content) }
+                }
+            }
+        }.map(\.path))
+    }
+
     func viewedChangeCount(_ scope: BulkViewedScope, viewed isViewed: Bool) -> Int {
         guard let review else { return 0 }
         return scope.paths(in: review.sidebarItems).filter { review.viewed.contains($0) != isViewed }.count
@@ -766,6 +836,9 @@ public extension ReviewSessionStore {
                 try Task.checkCancellation()
                 guard generation == self.refreshGeneration else { return }
                 self.review = presentation
+                self.changeSignatureCache = nil
+                self.sameChangePaths = [:]
+                self.regexFilterCache = nil
                 // Preserve selection by path; rowID resets (anchor restoration is Phase 9).
                 let kept = anchorPath.flatMap { path in
                     files.contains { $0.path == path } ? path : nil

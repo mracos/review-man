@@ -46,6 +46,10 @@ separate windows and no duplicates for the same repository + PR.
   several: Toggle Viewed, "Viewed & Next" and the row menu then act on the
   whole selection. The eye button next to the filter hides viewed files, so
   the sidebar lists only what is left to review.
+  The magnifying glass switches the filter to a regular expression on paths
+  or on the lines files add and remove; "Mark Files Matching Filter Viewed"
+  then marks what it found. A file's menu also marks every file with the
+  same change, or a similar one (most changed lines in common), viewed.
 - **Focused file bar**: the open file's path, a Viewed checkbox and "Viewed & Next". Shift-Option-Cmd-V marks the file viewed and opens the next unviewed one; Ctrl-Option-Cmd-Down/Up jump between unviewed files; Cmd-[ and Cmd-] go back and forward between the canvas and the files you visited. Cmd-+ and Cmd-- change the diff text size (Cmd-0 resets it); on the canvas they zoom instead.
 - **PR header** with state, review decision, CI checks (passed, failed, pending) and the description, shown as plain text.
 - **Inbox**: the sidebar's Inbox tab lists pull requests across all your repositories in collapsible sections: waiting for your review, your open PRs, all your PRs, and an optional Team section (open PRs in organizations you choose). The filter menu switches sections on and off, groups by repository (each group folds), switches repositories on and off, and narrows every section to PRs with chosen labels; rows show their labels in GitHub colors. It refreshes every 5 minutes, when the filter changes, or on demand; choosing a PR opens it in the window.

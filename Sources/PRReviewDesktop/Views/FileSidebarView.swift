@@ -79,6 +79,10 @@ public struct FileSidebarView: View {
                     Label("Every file is viewed", systemImage: "checkmark.circle")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("sidebar-all-viewed")
+                } else if fileRows.isEmpty, store.sidebarSearchIsInvalid {
+                    Label("Not a valid regular expression", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("sidebar-invalid-regex")
                 } else if fileRows.isEmpty {
                     Label("No matching files", systemImage: "magnifyingglass")
                         .foregroundStyle(.secondary)
@@ -161,11 +165,25 @@ public struct FileSidebarView: View {
 
     private var fileFilter: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+            Menu {
+                Picker("Match", selection: $store.sidebarSearchMode) {
+                    ForEach(SidebarSearchMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Image(systemName: store.sidebarSearchMode.isRegex ? "text.magnifyingglass" : "magnifyingglass")
+                    .foregroundStyle(store.sidebarSearchMode.isRegex ? Color.accentColor : .secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Match paths, or a regex on paths or changed lines")
+            .accessibilityLabel("Filter by \(store.sidebarSearchMode.title)")
+            .accessibilityIdentifier("sidebar-filter-mode")
 
-            TextField("Filter files", text: $store.sidebarSearch)
+            TextField(store.sidebarSearchMode.placeholder, text: $store.sidebarSearch)
                 .textFieldStyle(.plain)
+                .foregroundStyle(store.sidebarSearchIsInvalid ? Color.red : Color.primary)
                 .focused($focusedControl, equals: .filter)
                 .onSubmit { focusHighlightedFileList() }
                 .accessibilityIdentifier("sidebar-file-filter")
@@ -387,6 +405,18 @@ private struct SidebarFileItemRow: View {
                     Button("Mark All .\(ext) Files Viewed (\(count))" as String) {
                         store.setViewed(scope, viewed: true)
                     }
+                }
+            }
+            let sameChange = store.filesWithSameChange(as: item.path)
+            if !sameChange.isEmpty {
+                let unviewed = store.viewedChangeCount(.paths(sameChange), viewed: true)
+                if sameChange.count > 1, unviewed > 0 {
+                    Button("Mark \(unviewed) Files With the Same Change Viewed" as String) {
+                        store.setViewed(.paths(sameChange), viewed: true)
+                    }
+                }
+                Button("Mark Files With a Similar Change Viewed" as String) {
+                    store.markSimilarChangeViewed(to: item.path)
                 }
             }
         }
