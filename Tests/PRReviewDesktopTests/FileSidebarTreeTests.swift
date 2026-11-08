@@ -28,6 +28,23 @@ final class FileSidebarTreeTests: XCTestCase {
         )
     }
 
+    func testSiblingFoldersShareTheParentAndIncludeTheFolderItself() {
+        let items = [
+            item("Sources/App/Main.swift"),
+            item("Sources/Kit/Client.swift"),
+            item("Sources/Kit/Models/PR.swift"),
+            item("Sources/README.md"),
+            item("Tests/AppTests.swift"),
+        ]
+
+        XCTAssertEqual(FileSidebarTreeNode.siblingFolderIDs(of: "Sources/Kit", in: items),
+                       ["folder:Sources/App", "folder:Sources/Kit"])
+        XCTAssertEqual(FileSidebarTreeNode.siblingFolderIDs(of: "Tests", in: items),
+                       ["folder:Sources", "folder:Tests"])
+        XCTAssertEqual(FileSidebarTreeNode.siblingFolderIDs(of: "Sources/Kit/Models", in: items),
+                       ["folder:Sources/Kit/Models"])
+    }
+
     func testFilteredItemsProduceOnlyTheirContainingFoldersAndCounts() throws {
         let tree = FileSidebarTreeNode.build(from: [
             item("Sources/Views/FileSidebarView.swift"),

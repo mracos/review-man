@@ -200,11 +200,30 @@ public struct FileSidebarView: View {
             .accessibilityLabel(store.hideViewedFiles ? "Show viewed files" : "Hide viewed files")
             .accessibilityIdentifier("sidebar-hide-viewed")
 
+            collapseAllButton
+
             BulkViewedMenu(store: store)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
+    }
+
+    /// Collapses every folder, or expands them all once everything is folded.
+    private var collapseAllButton: some View {
+        let all = FileSidebarTreeNode.folderIDs(from: store.review?.sidebarItems ?? [])
+        let allCollapsed = !all.isEmpty && all.isSubset(of: collapsedFolderPaths)
+        return Button {
+            collapsedFolderPaths = allCollapsed ? [] : all
+        } label: {
+            Image(systemName: allCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.borderless)
+        .disabled(all.isEmpty)
+        .help(allCollapsed ? "Expand all folders" : "Collapse all folders")
+        .accessibilityLabel(allCollapsed ? "Expand all folders" : "Collapse all folders")
+        .accessibilityIdentifier("sidebar-collapse-all")
     }
 
     private func focusFileFilter() {
@@ -272,6 +291,19 @@ private struct SidebarFileTreeRow: View {
                         if unviewed < node.fileCount {
                             Button("Mark \(node.name) Unviewed" as String) { store.setViewed(scope, viewed: false) }
                         }
+                        Divider()
+                        Button(folderExpansion.wrappedValue ? "Collapse \(node.name)" : "Expand \(node.name)" as String) {
+                            folderExpansion.wrappedValue.toggle()
+                        }
+                        let siblings = FileSidebarTreeNode.siblingFolderIDs(of: node.path, in: store.filteredSidebarItems)
+                        if siblings.count > 1 {
+                            Button("Collapse \(node.name) and Sibling Folders" as String) { collapsedFolderPaths.formUnion(siblings) }
+                            Button("Expand \(node.name) and Sibling Folders" as String) { collapsedFolderPaths.subtract(siblings) }
+                        }
+                        Button("Collapse All Folders" as String) {
+                            collapsedFolderPaths = FileSidebarTreeNode.folderIDs(from: store.review?.sidebarItems ?? [])
+                        }
+                        Button("Expand All Folders" as String) { collapsedFolderPaths.removeAll() }
                     }
             }
             .accessibilityIdentifier("sidebar-folder-\(node.path)")
@@ -450,6 +482,14 @@ struct FileSidebarTreeNode: Identifiable, Equatable {
     /// IDs for every folder in the complete (unfiltered) sidebar tree. The
     /// menu command uses these to make Collapse All deterministic even while
     /// a search result is narrowing the visible branches.
+    /// The folders sharing `folderPath`'s parent, the folder itself included.
+    static func siblingFolderIDs(of folderPath: String, in items: [FileSidebarItem]) -> Set<String> {
+        let parent = folderPath.split(separator: "/").dropLast()
+        return folderIDs(from: items).filter { id in
+            id.dropFirst("folder:".count).split(separator: "/").dropLast() == parent
+        }
+    }
+
     static func folderIDs(from items: [FileSidebarItem]) -> Set<String> {
         var identifiers: Set<String> = []
         func collect(_ nodes: [FileSidebarTreeNode]) {
