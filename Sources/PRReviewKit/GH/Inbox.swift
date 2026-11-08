@@ -33,8 +33,9 @@ public struct InboxFilter: Equatable {
 public enum InboxSection: String, CaseIterable, Identifiable {
     case reviewRequested = "review-requested"
     case myOpen = "my-open"
-    case mine
     case team
+    /// Merged and closed PRs; off unless switched on.
+    case recentlyClosed = "recently-closed"
 
     public var id: String { rawValue }
 
@@ -42,8 +43,8 @@ public enum InboxSection: String, CaseIterable, Identifiable {
         switch self {
         case .reviewRequested: return "Waiting for my review"
         case .myOpen: return "My open PRs"
-        case .mine: return "My PRs"
         case .team: return "Team"
+        case .recentlyClosed: return "Recently closed"
         }
     }
 
@@ -56,11 +57,11 @@ public enum InboxSection: String, CaseIterable, Identifiable {
             terms = ["is:pr", "is:open", "archived:false", "review-requested:@me"]
         case .myOpen:
             terms = ["is:pr", "is:open", "archived:false", "author:@me"]
-        case .mine:
-            terms = ["is:pr", "archived:false", "author:@me"]
         case .team:
             guard !filter.teamOrganizations.isEmpty else { return nil }
             terms = ["is:pr", "is:open", "archived:false"] + filter.teamOrganizations.map { "org:\($0)" }
+        case .recentlyClosed:
+            terms = ["is:pr", "is:closed", "archived:false", "author:@me"]
         }
         let labels = filter.labels
             .map { $0.replacingOccurrences(of: "\"", with: "") }

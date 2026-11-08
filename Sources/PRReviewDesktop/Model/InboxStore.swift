@@ -8,7 +8,7 @@ import PRReviewKit
 public final class InboxStore: ObservableObject {
 
     static let pageSize = 25
-    static let defaultSections: [InboxSection] = [.reviewRequested, .myOpen, .mine]
+    static let defaultSections: [InboxSection] = [.reviewRequested, .myOpen]
 
     private enum Key {
         static let sections = "PRReview.inbox.sections"
