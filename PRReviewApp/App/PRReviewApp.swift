@@ -13,6 +13,7 @@ struct PRReviewApp: App {
     var body: some Scene {
         WindowGroup("PR Review", for: String.self) { $key in
             ReviewWindowView(store: coordinator.store(for: key))
+                .task { coordinator.registerServices() }
                 .background(OpenWindowProxy())
                 .environmentObject(coordinator)
                 .onOpenURL { url in
@@ -53,6 +54,17 @@ final class AppCoordinator: ObservableObject {
     /// every lookup, keeping the dictionary from growing with closed windows.
     private var stores: [String: WeakStoreBox] = [:]
     private let autoOpenDemoRequest: DemoAutoOpen?
+
+    private var pullRequestService: PullRequestService?
+
+    /// Hands the Services menu entry its provider; once is enough.
+    func registerServices() {
+        guard pullRequestService == nil else { return }
+        let service = PullRequestService { [weak self] url in self?.handle(url: url) }
+        pullRequestService = service
+        NSApplication.shared.servicesProvider = service
+        NSUpdateDynamicServices()
+    }
 
     /// Parses the demo launch arguments once. `--demo` opens the offline demo
     /// at the `.large` load-test scale by default; `--demo-scale
