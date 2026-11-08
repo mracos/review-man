@@ -91,6 +91,8 @@ public struct ReviewWindowView: View {
             if store.requestFocus != .none { store.requestFocus = .none }
         }
         .onChange(of: store.state) { [previous = store.state] state in
+            // The sheet would otherwise cover the loading screen and its progress.
+            if case .loading = state { showOpenSheet = false }
             if case .loading = previous, state == .loaded || state == .empty {
                 applyOpeningPreferences()
             }
