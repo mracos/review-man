@@ -12,8 +12,8 @@ final class LoadProgressTests: XCTestCase {
         progress.apply(.fetch(.diffRefused))
         progress.apply(.fetch(.filesFetched(300)))
 
-        XCTAssertEqual(progress.headline, "Fetching files: 300 of \(1_088.formatted())")
-        XCTAssertEqual(progress.sizeSummary, "\(1_088.formatted()) files · +\(9_000.formatted()) −120")
+        XCTAssertEqual(progress.headline, "Fetching files: 300 of 1088")
+        XCTAssertEqual(progress.sizeSummary, "1088 files · +9000 −120")
         XCTAssertNotNil(progress.note)
         XCTAssertEqual(progress.fractionCompleted!, 300.0 / 1_088.0, accuracy: 0.0001)
     }
@@ -26,7 +26,7 @@ final class LoadProgressTests: XCTestCase {
         progress.apply(.fetch(.diffRefused))
         progress.apply(.fetch(.filesFetched(1_500)))
 
-        XCTAssertEqual(progress.headline, "Fetching files: \(1_500.formatted()) of \(3_000.formatted())")
+        XCTAssertEqual(progress.headline, "Fetching files: 1500 of 3000")
         XCTAssertEqual(progress.fractionCompleted!, 0.5, accuracy: 0.0001)
     }
 

@@ -53,20 +53,20 @@ public struct LoadProgress: Equatable {
             return "Connecting to GitHub"
         case .fetching where diffRefused:
             if let total = changedFiles {
-                return "Fetching files: \(fetchedFiles.formatted()) of \(min(total, GitHubClient.maxListedFiles).formatted())"
+                return "Fetching files: \(fetchedFiles) of \(min(total, GitHubClient.maxListedFiles))"
             }
-            return "Fetching files: \(fetchedFiles.formatted())"
+            return "Fetching files: \(fetchedFiles)"
         case .fetching:
             return "Fetching the diff"
         case .preparing:
-            return "Preparing \(changedFiles.map { "\($0.formatted()) files" } ?? "the review")"
+            return "Preparing \(changedFiles.map { "\($0) files" } ?? "the review")"
         }
     }
 
     /// The pull request's size, once known.
     public var sizeSummary: String? {
         guard let changedFiles, let additions, let deletions else { return nil }
-        return "\(changedFiles.formatted()) \(changedFiles == 1 ? "file" : "files") · +\(additions.formatted()) −\(deletions.formatted())"
+        return "\(changedFiles) \(changedFiles == 1 ? "file" : "files") · +\(additions) −\(deletions)"
     }
 
     public var note: String? {
