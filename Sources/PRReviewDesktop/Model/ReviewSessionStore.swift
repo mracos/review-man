@@ -35,6 +35,7 @@ public final class ReviewSessionStore: ObservableObject {
     /// Leaves viewed files out of the sidebar, so it lists what is left to
     /// review. Kept for the window's next pull request.
     @Published public var hideViewedFiles = false
+    @Published public var sidebarSearchMode = SidebarSearchMode.paths
     /// Files picked together in the sidebar with Shift or Command. Empty
     /// unless more than one is picked; any single selection clears it.
     @Published public var selectedFilePaths: Set<String> = []
@@ -95,6 +96,15 @@ public final class ReviewSessionStore: ObservableObject {
     var commentableCache: [String: [DiffRowID]] = [:]
     var hunkIDsCache: [String: [DiffRowID]] = [:]
     var linePositionCache: [String: [DiffRowID: (hunk: Int, lineIndex: Int)]] = [:]
+    /// Every comparable file's change signature, in file order, built on the
+    /// first similarity question about the loaded review.
+    var changeSignatureCache: [(path: String, signature: Set<String>)]?
+    /// For each comparable path, the paths with the identical change, itself
+    /// included; built with the cache above.
+    var sameChangePaths: [String: [String]] = [:]
+    /// The last regex filter's matches (nil paths: the pattern does not
+    /// compile), so redraws do not rerun it over every changed line.
+    var regexFilterCache: (pattern: String, mode: SidebarSearchMode, paths: Set<String>?)?
     /// Debounced persistence tasks (see `ReviewSessionStoreWorkflows`): rapid
     /// mutations cancel the pending write and schedule a fresh one, so only
     /// the final snapshot reaches disk.
@@ -245,13 +255,18 @@ public final class ReviewSessionStore: ObservableObject {
 
     public var filteredSidebarItems: [FileSidebarItem] {
         guard let review else { return [] }
-        let query = sidebarSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let query = sidebarSearch.trimmingCharacters(in: .whitespacesAndNewlines)
         let items = hideViewedFiles ? review.sidebarItems.filter { !$0.isViewed } : review.sidebarItems
         guard !query.isEmpty else { return items }
+        if sidebarSearchMode.isRegex {
+            guard let matches = regexFilterMatches(query) else { return [] }
+            return items.filter { matches.contains($0.path) }
+        }
+        let lowered = query.lowercased()
         return items.filter { item in
             // Precomputed lowercase search text (path + status letter) avoids
             // re-lowercasing every path on every keystroke.
-            item.searchable.contains(query)
+            item.searchable.contains(lowered)
         }
     }
 
@@ -261,5 +276,8 @@ public final class ReviewSessionStore: ObservableObject {
         commentableCache.removeAll()
         hunkIDsCache.removeAll()
         linePositionCache.removeAll()
+        changeSignatureCache = nil
+        sameChangePaths = [:]
+        regexFilterCache = nil
     }
 }
