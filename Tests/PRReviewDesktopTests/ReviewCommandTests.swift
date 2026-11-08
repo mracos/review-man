@@ -148,6 +148,19 @@ final class ReviewCommandTests: XCTestCase {
     }
 
     @MainActor
+    func testUnviewedNavigationStaysInsideTheSidebarFilter() {
+        let store = makeLoadedStore(diff: threeFileDiff)
+        store.sidebarSearch = ".md"
+        store.select(filePath: "NOTES.md")
+
+        store.selectNextUnviewedFile()
+        XCTAssertEqual(store.selection.filePath, "README.md")
+
+        store.markViewedAndAdvance()
+        XCTAssertEqual(store.selection.filePath, "NOTES.md", "Src.swift is filtered out")
+    }
+
+    @MainActor
     func testMarkViewedAndAdvanceStopsWhenEverythingIsViewed() {
         let store = makeLoadedStore(diff: threeFileDiff)
         let paths = store.review?.files.map(\.path) ?? []
