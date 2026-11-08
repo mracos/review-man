@@ -1027,14 +1027,18 @@ public extension ReviewSessionStore {
 
     /// Walks the file list in `delta`'s direction, wrapping around, to the
     /// first file that is neither viewed nor the current one.
+    /// Moves through the files the sidebar shows, in its order. The current
+    /// file may itself be hidden (just marked viewed with viewed files hidden),
+    /// so the walk runs over every file and skips the ones not shown.
     private func selectAdjacentUnviewedFile(_ delta: Int) {
         guard let review, !review.files.isEmpty else { return }
-        let count = review.files.count
-        let start = selection.filePath.flatMap { review.fileIndexByPath[$0] } ?? (delta > 0 ? -1 : count)
+        let order = FileSidebarTreeNode.orderedPaths(from: review.sidebarItems)
+        let shown = Set(filteredSidebarItems.map(\.path))
+        let count = order.count
+        let start = selection.filePath.flatMap(order.firstIndex(of:)) ?? (delta > 0 ? -1 : count)
         for step in 1...count {
-            let index = ((start + delta * step) % count + count) % count
-            let path = review.files[index].path
-            guard path != selection.filePath, !review.viewed.contains(path) else { continue }
+            let path = order[((start + delta * step) % count + count) % count]
+            guard path != selection.filePath, shown.contains(path), !review.viewed.contains(path) else { continue }
             select(filePath: path)
             selection.rowID = nil
             return

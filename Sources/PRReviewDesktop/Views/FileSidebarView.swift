@@ -483,6 +483,14 @@ struct FileSidebarTreeNode: Identifiable, Equatable {
         return rows
     }
 
+    /// File paths in the order the tree lists them: folders first, by name.
+    static func orderedPaths(from items: [FileSidebarItem]) -> [String] {
+        func walk(_ nodes: [FileSidebarTreeNode]) -> [String] {
+            nodes.flatMap { $0.item.map { [$0.path] } ?? walk($0.children) }
+        }
+        return walk(build(from: items))
+    }
+
     /// IDs for every folder in the complete (unfiltered) sidebar tree. The
     /// menu command uses these to make Collapse All deterministic even while
     /// a search result is narrowing the visible branches.
