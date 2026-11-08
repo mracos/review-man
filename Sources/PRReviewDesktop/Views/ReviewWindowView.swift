@@ -78,6 +78,10 @@ public struct ReviewWindowView: View {
             }
             if store.requestFocus != .none { store.requestFocus = .none }
         }
+        .onChange(of: store.isFinding) { finding in
+            // Find searches the open file, so leave the canvas for it.
+            if finding, showCanvas, store.selectedFile != nil { showCanvas = false }
+        }
         .onChange(of: store.state) { [previous = store.state] state in
             if case .loading = previous, state == .loaded || state == .empty {
                 applyOpeningPreferences()
@@ -443,7 +447,13 @@ public struct ReviewWindowView: View {
                         }
 
                         if !showCanvas, let file = store.selectedFile {
-                            DiffView(store: store, file: file, presentation: $diffPresentation)
+                            VStack(spacing: 0) {
+                                if store.isFinding {
+                                    FindBar(store: store)
+                                    Divider()
+                                }
+                                DiffView(store: store, file: file, presentation: $diffPresentation)
+                            }
                         } else if !showCanvas {
                             EmptyStateView(
                                 icon: "sidebar.left",

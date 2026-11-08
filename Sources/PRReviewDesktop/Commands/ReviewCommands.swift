@@ -38,10 +38,28 @@ public struct ReviewCommands: Commands {
 
         CommandGroup(after: .pasteboard) {
             Divider()
+            Button("Find in File") {
+                focusedStore?.beginFind()
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(!availability.canFind || focusedStore?.selectedFile == nil)
+
+            Button("Find Next") {
+                focusedStore?.findNext()
+            }
+            .keyboardShortcut("g", modifiers: .command)
+            .disabled(focusedStore?.isFinding != true)
+
+            Button("Find Previous") {
+                focusedStore?.findPrevious()
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(focusedStore?.isFinding != true)
+
             Button("Focus File Filter") {
                 focusedStore?.requestFocus = .sidebarSearch
             }
-            .keyboardShortcut("f", modifiers: .command)
+            .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(!availability.canFind)
         }
 

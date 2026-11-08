@@ -50,6 +50,10 @@ public final class ReviewSessionStore: ObservableObject {
     @Published public var submitEvent: ReviewEvent = .comment
     @Published public var submitBody = ""
     @Published public var submitValidationMessage: String?
+    // Find in the open file.
+    @Published public var isFinding = false
+    @Published public internal(set) var findQuery = ""
+    @Published public internal(set) var findMatch: DiffFindMatch?
 
     /// The single hovered diff row, observed ONLY by diff-row views. Keeping
     /// hover outside the store's own @Published surface stops constant mouse

@@ -178,6 +178,53 @@ final class ReviewCommandTests: XCTestCase {
         XCTAssertEqual(path, files[2].path)
     }
 
+    // MARK: - Find
+
+    /// The matched line's code and the matched range, for readable asserts.
+    @MainActor
+    private func found(_ store: ReviewSessionStore) -> String? {
+        guard let match = store.findMatch, let file = store.selectedFile,
+              let row = store.review?.diffRows(for: file).first(where: { $0.id == match.rowID }),
+              case .line(let hunk, let index) = row.row, let line = file.line(at: hunk, index) else { return nil }
+        return "\(line.content)@\(match.range.lowerBound)..<\(match.range.upperBound)"
+    }
+
+    @MainActor
+    func testFindSelectsMatchesInTheOpenFileAndWraps() {
+        let store = makeLoadedStore()
+        store.beginFind()
+
+        store.setFindQuery("NEW")
+        XCTAssertEqual(found(store), "new2@0..<3")
+        XCTAssertEqual(store.findMatchPosition?.index, 1)
+        XCTAssertEqual(store.findMatchPosition?.count, 2)
+        XCTAssertEqual(store.selection.rowID, store.findMatch?.rowID, "the match's line is selected, so it scrolls into view")
+
+        store.findNext()
+        XCTAssertEqual(found(store), "new3@0..<3")
+        store.findNext()
+        XCTAssertEqual(found(store), "new2@0..<3")
+        store.findPrevious()
+        XCTAssertEqual(found(store), "new3@0..<3")
+    }
+
+    @MainActor
+    func testFindReportsNoMatchAndClearsOnEnd() {
+        let store = makeLoadedStore()
+        store.beginFind()
+
+        store.setFindQuery("ee")
+        XCTAssertEqual(found(store), "keep1@1..<3")
+
+        store.setFindQuery("zzz")
+        XCTAssertNil(store.findMatch)
+        XCTAssertEqual(store.findMatchPosition?.count, 0)
+
+        store.endFind()
+        XCTAssertFalse(store.isFinding)
+        XCTAssertNil(store.findMatch)
+    }
+
     private var threeFileDiff: String {
         sampleDiff + """
 
