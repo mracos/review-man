@@ -73,6 +73,10 @@ public struct ReviewWindowView: View {
             }
             if store.requestFocus != .none { store.requestFocus = .none }
         }
+        .onChange(of: store.state) { state in
+            // The sheet would otherwise cover the loading screen and its progress.
+            if case .loading = state { showOpenSheet = false }
+        }
         .onChange(of: showCanvas) { showingCanvas in
             guard !showingCanvas, let file = store.selectedFile else { return }
             // Start the render interval when the focused diff actually becomes
