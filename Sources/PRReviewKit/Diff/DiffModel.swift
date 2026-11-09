@@ -1,6 +1,6 @@
 import Foundation
 
-public enum FileStatus: String, Equatable {
+public enum FileStatus: String, Equatable, CaseIterable {
     case added
     case deleted
     case modified

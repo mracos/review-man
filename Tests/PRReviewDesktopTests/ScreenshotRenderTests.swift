@@ -205,6 +205,14 @@ final class ScreenshotRenderTests: XCTestCase {
         }
     }
 
+    func testStatusFilter() throws {
+        let store = try loadedStore()
+        store.statusFilter = [.modified]
+        try render("status-filter", size: CGSize(width: 320, height: 240)) {
+            FileSidebarView(store: store, showCanvas: .constant(false), focusSearch: .constant(false))
+        }
+    }
+
     private func loadedStore() throws -> ReviewSessionStore {
         let store = ReviewSessionStore(service: ScreenshotService(), persistence: ScreenshotPersistence())
         store.open(reference: "acme/review-app#42")

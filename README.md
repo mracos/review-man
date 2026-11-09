@@ -49,6 +49,8 @@ separate windows and no duplicates for the same repository + PR.
   several: Toggle Viewed, "Viewed & Next" and the row menu then act on the
   whole selection. The eye button next to the filter hides viewed files, so
   the sidebar lists only what is left to review.
+  The status button next to it shows only added, modified, deleted or renamed
+  files, so "Mark Files Matching Filter Viewed" can take e.g. every deleted file.
   The magnifying glass switches the filter to a regular expression on paths
   or on the lines files add and remove; "Mark Files Matching Filter Viewed"
   then marks what it found. A file's menu also marks every file with the

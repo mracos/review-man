@@ -75,7 +75,7 @@ public struct FileSidebarView: View {
             }
 
             Section("Files") {
-                if fileRows.isEmpty, store.hideViewedFiles, store.sidebarSearch.isEmpty {
+                if fileRows.isEmpty, store.hideViewedFiles, !store.isSidebarFiltered {
                     Label("Every file is viewed", systemImage: "checkmark.circle")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("sidebar-all-viewed")
@@ -211,6 +211,8 @@ public struct FileSidebarView: View {
             .accessibilityIdentifier("sidebar-hide-viewed")
 
             collapseAllButton
+
+            StatusFilterMenu(store: store)
 
             BulkViewedMenu(store: store)
         }
@@ -602,7 +604,7 @@ private struct BulkViewedMenu: View {
 
     var body: some View {
         Menu {
-            let filtered = store.sidebarSearch.isEmpty ? nil : BulkViewedScope.paths(store.filteredSidebarItems.map(\.path))
+            let filtered = store.isSidebarFiltered ? BulkViewedScope.paths(store.filteredSidebarItems.map(\.path)) : nil
             if let filtered {
                 entry("Files Matching Filter", filtered)
             }
@@ -631,5 +633,39 @@ private struct BulkViewedMenu: View {
         if count > 0 {
             Button("Mark \(title) Viewed (\(count))" as String) { store.setViewed(scope, viewed: true) }
         }
+    }
+}
+
+/// Narrows the sidebar to added, modified, deleted or renamed files; with
+/// the bulk viewed menu, that marks e.g. every deleted file in two clicks.
+private struct StatusFilterMenu: View {
+    @ObservedObject var store: ReviewSessionStore
+
+    var body: some View {
+        Menu {
+            ForEach(FileStatus.allCases, id: \.self) { status in
+                let count = store.review?.sidebarItems.filter { $0.statusLetter == status.letter }.count ?? 0
+                Toggle("\(status.rawValue.capitalized) (\(count))" as String, isOn: Binding(
+                    get: { store.statusFilter.contains(status) },
+                    set: { on in
+                        if on { store.statusFilter.insert(status) } else { store.statusFilter.remove(status) }
+                    }
+                ))
+                .disabled(count == 0 && !store.statusFilter.contains(status))
+            }
+            Divider()
+            Button("Show All Statuses" as String) { store.statusFilter = [] }
+                .disabled(store.statusFilter.isEmpty)
+        } label: {
+            Image(systemName: store.statusFilter.isEmpty
+                  ? "line.3.horizontal.decrease.circle"
+                  : "line.3.horizontal.decrease.circle.fill")
+                .foregroundStyle(store.statusFilter.isEmpty ? Color.secondary : Color.accentColor)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Show only added, modified, deleted or renamed files")
+        .accessibilityIdentifier("sidebar-status-filter")
     }
 }
