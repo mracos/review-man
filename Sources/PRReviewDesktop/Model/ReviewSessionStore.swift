@@ -35,6 +35,8 @@ public final class ReviewSessionStore: ObservableObject {
     /// Leaves viewed files out of the sidebar, so it lists what is left to
     /// review. Kept for the window's next pull request.
     @Published public var hideViewedFiles = false
+    /// Statuses the sidebar shows; empty shows every file.
+    @Published public var statusFilter: Set<FileStatus> = []
     @Published public var sidebarSearchMode = SidebarSearchMode.paths
     /// Files picked together in the sidebar with Shift or Command. Empty
     /// unless more than one is picked; any single selection clears it.
@@ -256,7 +258,10 @@ public final class ReviewSessionStore: ObservableObject {
     public var filteredSidebarItems: [FileSidebarItem] {
         guard let review else { return [] }
         let query = sidebarSearch.trimmingCharacters(in: .whitespacesAndNewlines)
-        let items = hideViewedFiles ? review.sidebarItems.filter { !$0.isViewed } : review.sidebarItems
+        let letters = Set(statusFilter.map(\.letter))
+        let items = review.sidebarItems.filter { item in
+            !(hideViewedFiles && item.isViewed) && (letters.isEmpty || letters.contains(item.statusLetter))
+        }
         guard !query.isEmpty else { return items }
         if sidebarSearchMode.isRegex {
             guard let matches = regexFilterMatches(query) else { return [] }
@@ -268,6 +273,11 @@ public final class ReviewSessionStore: ObservableObject {
             // re-lowercasing every path on every keystroke.
             item.searchable.contains(lowered)
         }
+    }
+
+    /// Whether the text filter or the status filter narrows the sidebar.
+    public var isSidebarFiltered: Bool {
+        !sidebarSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !statusFilter.isEmpty
     }
 
     /// Resets per-review derived caches (rendered lines + navigation indexes).

@@ -281,6 +281,33 @@ final class ReviewCommandTests: XCTestCase {
         """
     }
 
+    @MainActor
+    func testStatusFilterNarrowsTheSidebarSoBulkViewedTakesOnlyThose() {
+        let store = makeLoadedStore(diff: sampleDiff + """
+
+        diff --git a/New.swift b/New.swift
+        new file mode 100644
+        --- /dev/null
+        +++ b/New.swift
+        @@ -0,0 +1 @@
+        +added
+        diff --git a/Old.swift b/Old.swift
+        deleted file mode 100644
+        --- a/Old.swift
+        +++ /dev/null
+        @@ -1 +0,0 @@
+        -removed
+        """)
+        XCTAssertFalse(store.isSidebarFiltered)
+
+        store.statusFilter = [.added, .deleted]
+
+        XCTAssertTrue(store.isSidebarFiltered)
+        XCTAssertEqual(Set(store.filteredSidebarItems.map(\.path)), ["New.swift", "Old.swift"])
+        store.setViewed(.paths(store.filteredSidebarItems.map(\.path)), viewed: true)
+        XCTAssertEqual(store.review?.viewed, ["New.swift", "Old.swift"])
+    }
+
     private var twoMarkdownFilesDiff: String {
         """
         diff --git a/README.md b/README.md
