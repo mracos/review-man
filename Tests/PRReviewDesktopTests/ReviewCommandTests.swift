@@ -198,6 +198,16 @@ final class ReviewCommandTests: XCTestCase {
     }
 
     @MainActor
+    func testRowMenuActsOnTheSelectionOnlyWhenTheRowIsInIt() {
+        let store = makeLoadedStore(diff: sampleDiff + "\n" + twoMarkdownFilesDiff)
+        let paths = store.review?.files.map(\.path) ?? []
+        store.selectedFilePaths = [paths[0], paths[1]]
+
+        XCTAssertEqual(store.viewedMenuTargets(for: paths[1]), [paths[0], paths[1]].sorted())
+        XCTAssertEqual(store.viewedMenuTargets(for: paths[2]), [paths[2]], "a row outside the selection acts alone")
+    }
+
+    @MainActor
     func testSingleSelectionClearsTheMultiSelection() {
         let store = makeLoadedStore(diff: twoMarkdownFilesDiff)
         store.selectedFilePaths = ["README.md", "NOTES.md"]

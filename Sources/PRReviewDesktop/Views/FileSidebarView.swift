@@ -408,19 +408,20 @@ private struct SidebarFileItemRow: View {
         }
         .padding(.vertical, 1)
         .contextMenu {
-            if store.selectedFilePaths.count > 1, store.selectedFilePaths.contains(item.path) {
-                let scope = BulkViewedScope.paths(Array(store.selectedFilePaths))
+            let targets = store.viewedMenuTargets(for: item.path)
+            if targets.count > 1 {
+                let scope = BulkViewedScope.paths(targets)
                 let unviewed = store.viewedChangeCount(scope, viewed: true)
                 if unviewed > 0 {
                     Button("Mark \(unviewed) Selected Files Viewed" as String) { store.setViewed(scope, viewed: true) }
                 }
-                if unviewed < store.selectedFilePaths.count {
+                if unviewed < targets.count {
                     Button("Mark Selected Files Unviewed" as String) { store.setViewed(scope, viewed: false) }
                 }
-                Divider()
-            }
-            Button(item.isViewed ? "Mark Unviewed" : "Mark Viewed") {
-                store.toggleViewed(filePath: item.path)
+            } else {
+                Button(item.isViewed ? "Mark Unviewed" : "Mark Viewed") {
+                    store.toggleViewed(filePath: item.path)
+                }
             }
             if let ext = BulkViewedScope.fileExtension(of: item.path) {
                 let scope = BulkViewedScope.fileExtension(ext)
