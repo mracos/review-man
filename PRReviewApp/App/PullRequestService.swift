@@ -16,8 +16,8 @@ final class PullRequestService: NSObject {
         userData: String,
         error: AutoreleasingUnsafeMutablePointer<NSString>
     ) {
-        let text = pasteboard.string(forType: .string) ?? pasteboard.string(forType: .URL) ?? ""
-        guard let endpoint = PullRequestTextScanner.endpoint(in: text),
+        let texts = [NSPasteboard.PasteboardType.string, .URL].compactMap { pasteboard.string(forType: $0) }
+        guard let endpoint = PullRequestTextScanner.endpoint(inAnyOf: texts),
               let url = URL(string: "pr-review://open/\(endpoint.owner)/\(endpoint.repo)/\(endpoint.number)") else {
             AppLog.warning("service", "No pull request in the selected text")
             error.pointee = "The selection has no GitHub pull request link or owner/repo#number."
