@@ -23,8 +23,13 @@ struct PRReviewApp: App {
                     // sample review without gh, persistence, or dependency
                     // checks. --demo defaults to the .large load-test scale;
                     // see AppCoordinator for --demo-scale / --demo-files.
-                    coordinator.consumeAutoOpenDemo()
+                    coordinator.consumeAutoOpenDemo(key: key)
                 }
+        } defaultValue: {
+            // A blank window (launch, File > New Window) gets a key of its
+            // own; a shared one would show a PR opened in one blank window in
+            // every other.
+            "window-\(UUID().uuidString)"
         }
         .defaultSize(width: 1100, height: 720)
         .commands {
@@ -90,12 +95,12 @@ final class AppCoordinator: ObservableObject {
 
     /// Consumed once per process; opens the requested demo review on the
     /// first blank window.
-    func consumeAutoOpenDemo() {
+    func consumeAutoOpenDemo(key: String) {
         guard let request = autoOpenDemoRequest else { return }
         if let files = request.files, let lines = request.lines {
-            store(for: nil).openDemo(scale: request.scale, files: files, lines: lines)
+            store(for: key).openDemo(scale: request.scale, files: files, lines: lines)
         } else {
-            store(for: nil).openDemo(scale: request.scale)
+            store(for: key).openDemo(scale: request.scale)
         }
     }
 
