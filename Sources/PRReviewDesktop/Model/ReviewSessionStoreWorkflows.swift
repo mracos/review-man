@@ -393,6 +393,12 @@ public extension ReviewSessionStore {
         return selection.filePath.map { [$0] } ?? []
     }
 
+    /// What a row's context menu marks: the multi-selection when the row is
+    /// part of it, else that row alone, as Finder does.
+    func viewedMenuTargets(for path: String) -> [String] {
+        selectedFilePaths.count > 1 && selectedFilePaths.contains(path) ? selectedFilePaths.sorted() : [path]
+    }
+
     /// Like GitHub's checkbox on a mixed selection: marks every target viewed
     /// unless all of them already are, then unmarks them all.
     func toggleViewedForSelection() {
